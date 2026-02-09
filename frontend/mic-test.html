@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microphone Test - Communication Bridge AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .status {
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .status.info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+        
+        .status.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .status.error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        
+        .status.warning {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .transcript {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 100px;
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #2d3748;
+        }
+        
+        .transcript.empty {
+            color: #a0aec0;
+            font-style: italic;
+        }
+        
+        .info-box {
+            background: #edf2f7;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .info-box strong {
+            color: #2d3748;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .browser-info {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Microphone Test</h1>
+        <p class="subtitle">Test your microphone and speech recognition</p>
+        
+        <div id="status" class="status info">
+            Click "Test Microphone" to begin
+        </div>
+        
+        <button id="testBtn" class="btn-primary">Test Microphone</button>
+        <button id="stopBtn" class="btn-danger" style="display: none;">Stop Recording</button>
+        
+        <div id="transcript" class="transcript empty">
+            Your speech will appear here...
+        </div>
+        
+        <div class="info-box">
+            <strong>How to allow microphone access:</strong>
+            1. Click the 🔒 lock icon in your browser's address bar<br>
+            2. Find "Microphone" in the permissions list<br>
+            3. Change it to "Allow"<br>
+            4. Refresh this page and try again
+        </div>
+        
+        <div class="browser-info">
+            <strong>Browser:</strong> <span id="browserInfo"></span><br>
+            <strong>Speech Recognition:</strong> <span id="speechSupport"></span>
+        </div>
+    </div>
+    
+    <script>
+        let recognition = null;
+        let isRecording = false;
+        
+        // Detect browser
+        const browserInfo = navigator.userAgent;
+        document.getElementById('browserInfo').textContent = browserInfo.includes('Chrome') ? 'Chrome' : 
+                                                             browserInfo.includes('Edge') ? 'Edge' : 
+                                                             browserInfo.includes('Safari') ? 'Safari' : 
+                                                             'Other';
+        
+        // Check speech recognition support
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            document.getElementById('speechSupport').textContent = '✅ Supported';
+            document.getElementById('speechSupport').style.color = '#22543d';
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onstart = () => {
+                console.log('Recognition started');
+                updateStatus('🔴 Recording... Speak now!', 'success');
+            };
+            
+            recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = 0; i < event.results.length; i++) {
+                    transcript += event.results[i][0].transcript + ' ';
+                }
+                
+                const transcriptEl = document.getElementById('transcript');
+                transcriptEl.textContent = transcript;
+                transcriptEl.classList.remove('empty');
+                console.log('Transcript:', transcript);
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('Recognition error:', event.error);
+                
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    updateStatus('❌ Microphone access denied! See instructions below.', 'error');
+                } else if (event.error === 'no-speech') {
+                    updateStatus('⚠️ No speech detected. Keep speaking...', 'warning');
+                    return; // Don't stop
+                } else {
+                    updateStatus(`Error: ${event.error}`, 'error');
+                }
+                
+                stopRecording();
+            };
+            
+            recognition.onend = () => {
+                console.log('Recognition ended, isRecording:', isRecording);
+                if (isRecording) {
+                    console.log('Restarting...');
+                    setTimeout(() => {
+                        if (isRecording) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                console.error('Restart error:', e);
+                                stopRecording();
+                            }
+                        }
+                    }, 100);
+                }
+            };
+            
+        } else {
+            document.getElementById('speechSupport').textContent = '❌ Not Supported';
+            document.getElementById('speechSupport').style.color = '#742a2a';
+            document.getElementById('testBtn').disabled = true;
+            updateStatus('Speech recognition not supported in this browser. Try Chrome or Edge.', 'error');
+        }
+        
+        document.getElementById('testBtn').addEventListener('click', () => {
+            if (!recognition) return;
+            
+            isRecording = true;
+            document.getElementById('testBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'block';
+            document.getElementById('transcript').textContent = '';
+            document.getElementById('transcript').classList.add('empty');
+            
+            updateStatus('🎤 Requesting microphone access...', 'info');
+            
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('Start error:', error);
+                updateStatus('Failed to start: ' + error.message, 'error');
+                stopRecording();
+            }
+        });
+        
+        document.getElementById('stopBtn').addEventListener('click', stopRecording);
+        
+        function stopRecording() {
+            isRecording = false;
+            document.getElementById('testBtn').style.display = 'block';
+            document.getElementById('stopBtn').style.display = 'none';
+            
+            if (recognition) {
+                try {
+                    recognition.stop();
+                    updateStatus('✓ Recording stopped', 'info');
+                } catch (error) {
+                    console.error('Stop error:', error);
+                }
+            }
+        }
+        
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+    </script>
+</body>
+</html>

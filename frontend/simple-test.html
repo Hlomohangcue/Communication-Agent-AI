@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Test</title>
+</head>
+<body>
+    <h1>Simple Click Test</h1>
+    <button id="test-btn">Click Me</button>
+    <div id="output"></div>
+    
+    <script>
+        console.log('Script loaded');
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded');
+            
+            const btn = document.getElementById('test-btn');
+            console.log('Button found:', btn);
+            
+            btn.addEventListener('click', (e) => {
+                console.log('Button clicked!', e);
+                document.getElementById('output').textContent = 'Button was clicked at ' + new Date().toLocaleTimeString();
+            });
+            
+            console.log('Listener attached');
+        });
+    </script>
+</body>
+</html>

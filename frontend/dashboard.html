@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Communication Bridge AI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <h1>Communication Bridge AI - Dashboard</h1>
+            <div class="status">
+                <span id="status-indicator" class="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
+        
+        <div class="dashboard-grid">
+            <section class="panel simulation-panel">
+                <h2>Classroom Simulation</h2>
+                <div class="simulation-controls">
+                    <button type="button" id="start-sim" class="btn-primary">Start Simulation</button>
+                    <button type="button" id="stop-sim" class="btn-danger" style="display: none;">Stop Simulation</button>
+                    <span id="session-id" class="session-info"></span>
+                </div>
+                
+                <div class="communication-area">
+                    <div class="input-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3>Non-Verbal Student Input</h3>
+                            <div class="input-mode-toggle">
+                                <button type="button" id="text-mode-btn" class="mode-btn active">
+                                    📝 Text
+                                </button>
+                                <button type="button" id="speech-mode-btn" class="mode-btn">
+                                    🎤 Speech
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="text-input-mode">
+                            <div class="token-buttons">
+                                <button type="button" class="token-btn" data-token="👋">👋 Greet</button>
+                                <button type="button" class="token-btn" data-token="🙋">🙋 Help</button>
+                                <button type="button" class="token-btn" data-token="❓">❓ Question</button>
+                                <button type="button" class="token-btn" data-token="✋">✋ Stop</button>
+                                <button type="button" class="token-btn" data-token="👍">👍 Yes</button>
+                                <button type="button" class="token-btn" data-token="👎">👎 No</button>
+                                <button type="button" class="token-btn" data-token="🚽">🚽 Bathroom</button>
+                                <button type="button" class="token-btn" data-token="🍎">🍎 Hungry</button>
+                                <button type="button" class="token-btn" data-token="💧">💧 Thirsty</button>
+                                <button type="button" class="token-btn" data-token="😊">😊 Happy</button>
+                                <button type="button" class="token-btn" data-token="😢">😢 Sad</button>
+                                <button type="button" class="token-btn" data-token="😰">😰 Worried</button>
+                                <button type="button" class="token-btn" data-token="🤔">🤔 Thinking</button>
+                                <button type="button" class="token-btn" data-token="😴">😴 Tired</button>
+                                <button type="button" class="token-btn" data-token="🤒">🤒 Sick</button>
+                                <button type="button" class="token-btn" data-token="📚">📚 Study</button>
+                                <button type="button" class="token-btn" data-token="🎨">🎨 Art</button>
+                                <button type="button" class="token-btn" data-token="⚽">⚽ Play</button>
+                                <button type="button" class="token-btn" data-token="🏠">🏠 Home</button>
+                                <button type="button" class="token-btn" data-token="👨‍👩‍👧">👨‍👩‍👧 Family</button>
+                                <button type="button" class="token-btn" data-token="🙏">🙏 Please</button>
+                                <button type="button" class="token-btn" data-token="❤️">❤️ Love</button>
+                                <button type="button" class="token-btn" data-token="🎉">🎉 Celebrate</button>
+                                <button type="button" class="token-btn" data-token="😡">😡 Angry</button>
+                            </div>
+                            <textarea id="student-input" placeholder="Type or use tokens above..."></textarea>
+                        </div>
+                        
+                        <div id="speech-input-mode" style="display: none;">
+                            <div class="microphone-info">
+                                <p>🎤 <strong>Microphone Access Required</strong></p>
+                                <p>When you click "Start Recording", your browser will ask for microphone permission. Please click "Allow".</p>
+                            </div>
+                            <div class="speech-controls">
+                                <button type="button" id="start-recording" class="btn-record">
+                                    🎤 Start Recording
+                                </button>
+                                <button type="button" id="stop-recording" class="btn-record-stop" style="display: none;">
+                                    ⏹️ Stop Recording
+                                </button>
+                                <div id="recording-status" class="recording-status"></div>
+                            </div>
+                            <div id="speech-transcript" class="speech-transcript"></div>
+                        </div>
+                        
+                        <button type="button" id="send-message" class="btn-secondary">Send Message</button>
+                    </div>
+                    
+                    <div class="monitoring-section">
+                        <div class="workflow-section">
+                            <h3>Agent Workflow</h3>
+                            <div id="workflow-display" class="workflow-list"></div>
+                        </div>
+                        
+                        <div class="logs-section">
+                            <h3>Agent Decision Logs</h3>
+                            <div class="log-controls">
+                                <button type="button" id="refresh-logs" class="btn-small">Refresh</button>
+                                <button type="button" id="clear-logs" class="btn-small">Clear</button>
+                            </div>
+                            <div id="logs-display" class="logs-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section class="panel conversation-panel">
+                <h2>Conversation History</h2>
+                <div id="conversation-display" class="conversation-list"></div>
+            </section>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Communication Bridge AI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .btn-start {
+            background: #667eea;
+            color: white;
+        }
+        .btn-stop {
+            background: #f56565;
+            color: white;
+        }
+        .btn-send {
+            background: #48bb78;
+            color: white;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 6px;
+            background: #e2e8f0;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .output {
+            padding: 15px;
+            margin: 15px 0;
+            background: #f7fafc;
+            border-radius: 6px;
+            min-height: 60px;
+        }
+        .log {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Communication Bridge AI - Test Page</h1>
+        
+        <div class="status" id="status">
+            Status: <span id="status-text">Not connected</span>
+        </div>
+        
+        <div class="status" id="session-status">
+            Session: <span id="session-text">No active session</span>
+        </div>
+        
+        <div>
+            <button type="button" id="start-btn" class="btn-start">Start Simulation</button>
+            <button type="button" id="stop-btn" class="btn-stop" style="display: none;">Stop Simulation</button>
+        </div>
+        
+        <div>
+            <h3>Send Message</h3>
+            <textarea id="input" rows="3" placeholder="Type your message..." disabled></textarea>
+            <button type="button" id="send-btn" class="btn-send" disabled>Send Message</button>
+        </div>
+        
+        <div>
+            <h3>Output</h3>
+            <div class="output" id="output">Waiting for messages...</div>
+        </div>
+        
+        <div>
+            <h3>Debug Log</h3>
+            <div id="log-container"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let sessionId = null;
+        let isActive = false;
+        
+        function log(message) {
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log';
+            logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            document.getElementById('log-container').insertBefore(logDiv, document.getElementById('log-container').firstChild);
+            console.log(message);
+        }
+        
+        async function checkConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/`);
+                const data = await response.json();
+                document.getElementById('status-text').textContent = 'Connected ✓';
+                document.getElementById('status-text').style.color = 'green';
+                log('Backend connected');
+            } catch (error) {
+                document.getElementById('status-text').textContent = 'Disconnected ✗';
+                document.getElementById('status-text').style.color = 'red';
+                log('Backend connection failed: ' + error.message);
+            }
+        }
+        
+        async function startSimulation() {
+            log('=== START SIMULATION CLICKED ===');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            
+            log(`Before: isActive=${isActive}, sessionId=${sessionId}`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/simulate/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                sessionId = data.session_id;
+                isActive = true;
+                
+                log(`After API: isActive=${isActive}, sessionId=${sessionId}`);
+                
+                // Store in sessionStorage for persistence
+                sessionStorage.setItem('sessionId', sessionId);
+                sessionStorage.setItem('isActive', 'true');
+                
+                document.getElementById('session-text').textContent = `${sessionId.substring(0, 8)}... (ACTIVE)`;
+                document.getElementById('session-text').style.color = 'green';
+                document.getElementById('session-text').style.fontWeight = 'bold';
+                
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+                
+                log(`Buttons: start=${startBtn.style.display}, stop=${stopBtn.style.display}`);
+                
+                document.getElementById('input').disabled = false;
+                document.getElementById('send-btn').disabled = false;
+                
+                log('=== SIMULATION IS NOW ACTIVE ===');
+                log('Input enabled. You can type and send messages!');
+                
+                // Verify state after 1 second
+                setTimeout(() => {
+                    log(`State check: isActive=${isActive}, sessionId=${sessionId}`);
+                    log(`Start button display: ${startBtn.style.display}`);
+                    log(`Stop button display: ${stopBtn.style.display}`);
+                }, 1000);
+                
+            } catch (error) {
+                log('ERROR: ' + error.message);
+            }
+        }
+        
+        function stopSimulation() {
+            log('=== STOP SIMULATION CLICKED ===');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            
+            const oldSession = sessionId;
+            sessionId = null;
+            isActive = false;
+            
+            // Clear sessionStorage
+            sessionStorage.removeItem('sessionId');
+            sessionStorage.removeItem('isActive');
+            
+            log(`Session stopped: ${oldSession}`);
+            log(`isActive = ${isActive}`);
+            
+            document.getElementById('session-text').textContent = `${oldSession.substring(0, 8)}... (STOPPED)`;
+            document.getElementById('session-text').style.color = 'red';
+            
+            stopBtn.style.display = 'none';
+            startBtn.style.display = 'inline-block';
+            
+            document.getElementById('input').disabled = true;
+            document.getElementById('send-btn').disabled = true;
+            document.getElementById('input').value = '';
+            
+            log('=== SIMULATION STOPPED ===');
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('input').value;
+            
+            if (!input.trim()) {
+                log('ERROR: No message entered');
+                return;
+            }
+            
+            if (!isActive || !sessionId) {
+                log('ERROR: No active session');
+                return;
+            }
+            
+            log(`Sending message: "${input}"`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/simulate/step`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        input_text: input
+                    })
+                });
+                
+                const data = await response.json();
+                log('Response received');
+                
+                document.getElementById('output').textContent = data.communication_result.output;
+                document.getElementById('input').value = '';
+                
+                log(`Output: ${data.communication_result.output}`);
+                log(`Intent: ${data.communication_result.intent}`);
+                
+            } catch (error) {
+                log('Error sending message: ' + error.message);
+            }
+        }
+        
+        document.getElementById('start-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            startSimulation();
+        });
+        document.getElementById('stop-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            stopSimulation();
+        });
+        document.getElementById('send-btn').addEventListener('click', (e) => {
+            e.preventDefault();
+            sendMessage();
+        });
+        
+        checkConnection();
+        setInterval(checkConnection, 5000);
+        
+        // Check for existing session on page load
+        const savedSessionId = sessionStorage.getItem('sessionId');
+        const savedIsActive = sessionStorage.getItem('isActive');
+        
+        if (savedSessionId && savedIsActive === 'true') {
+            log('Found existing session: ' + savedSessionId);
+            sessionId = savedSessionId;
+            isActive = true;
+            
+            document.getElementById('session-text').textContent = `${sessionId.substring(0, 8)}... (ACTIVE)`;
+            document.getElementById('session-text').style.color = 'green';
+            document.getElementById('session-text').style.fontWeight = 'bold';
+            
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('stop-btn').style.display = 'inline-block';
+            document.getElementById('input').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+            
+            log('Session restored - you can continue sending messages');
+        }
+        
+        log('Test page loaded');
+    </script>
+</body>
+</html>
