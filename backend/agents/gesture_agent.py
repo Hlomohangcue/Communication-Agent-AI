@@ -4,7 +4,7 @@ Translates text/speech to gesture sequences for non-verbal users
 """
 
 import google.generativeai as genai
-from backend.config import GEMINI_API_KEY
+from config import GEMINI_API_KEY
 
 class GestureAgent:
     def __init__(self):

@@ -16,7 +16,89 @@
             </div>
         </header>
         
+        <!-- Communication Mode Selector -->
+        <div class="mode-selector">
+            <button type="button" class="mode-btn active" id="mode-nonverbal-to-verbal">
+                👤 → 🗣️ Non-Verbal to Verbal
+            </button>
+            <button type="button" class="mode-btn" id="mode-verbal-to-nonverbal">
+                🗣️ → 👤 Verbal to Non-Verbal
+            </button>
+            <button type="button" class="mode-btn" id="mode-bidirectional">
+                ↔️ Bidirectional
+            </button>
+        </div>
+        
         <div class="dashboard-grid">
+            <!-- Bidirectional Communication View (Hidden by default) -->
+            <div id="bidirectional-view" style="display: none;">
+                <div class="bidirectional-container">
+                    <!-- Non-Verbal User Panel -->
+                    <div class="user-panel">
+                        <h3>👤 Non-Verbal User</h3>
+                        
+                        <div class="input-section">
+                            <h4>Input (Gestures/Emojis):</h4>
+                            <textarea id="nonverbal-input" placeholder="Select gestures or type emojis..." rows="3"></textarea>
+                            
+                            <div class="phrase-library">
+                                <h4>Quick Phrases:</h4>
+                                <div id="nonverbal-phrases"></div>
+                            </div>
+                            
+                            <div class="gesture-palette" id="gesture-palette"></div>
+                            
+                            <button type="button" id="send-nonverbal" class="btn-primary" style="margin-top: 15px; width: 100%;">
+                                Send to Verbal User
+                            </button>
+                        </div>
+                        
+                        <div class="output-section" style="margin-top: 20px;">
+                            <h4>Received (from Verbal User):</h4>
+                            <div class="gesture-display empty" id="nonverbal-received">
+                                Waiting for messages...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Verbal User Panel -->
+                    <div class="user-panel">
+                        <h3>🗣️ Verbal User</h3>
+                        
+                        <div class="input-section">
+                            <h4>Input (Text/Speech):</h4>
+                            <textarea id="verbal-input" placeholder="Type your message..." rows="3"></textarea>
+                            
+                            <div class="phrase-library">
+                                <h4>Quick Phrases:</h4>
+                                <div id="verbal-phrases"></div>
+                            </div>
+                            
+                            <button type="button" id="send-verbal" class="btn-primary" style="margin-top: 15px; width: 100%;">
+                                Send to Non-Verbal User
+                            </button>
+                        </div>
+                        
+                        <div class="output-section" style="margin-top: 20px;">
+                            <h4>Translation to Gestures:</h4>
+                            <div class="gesture-display empty" id="verbal-gesture-output">
+                                Your message will be translated to gestures here...
+                            </div>
+                            <div id="translation-info" class="translation-method"></div>
+                        </div>
+                        
+                        <div class="output-section" style="margin-top: 20px;">
+                            <h4>Received (from Non-Verbal User):</h4>
+                            <div class="message-display" id="verbal-received">
+                                Waiting for messages...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Original Single Direction View -->
+            <div id="single-direction-view">
             <section class="panel simulation-panel">
                 <h2>Classroom Simulation</h2>
                 <div class="simulation-controls">
@@ -111,6 +193,7 @@
                 <h2>Conversation History</h2>
                 <div id="conversation-display" class="conversation-list"></div>
             </section>
+        </div>
         </div>
     </div>
     

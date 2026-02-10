@@ -51,9 +51,9 @@ cd backend
 python main.py
 ```
 
-2. **Open the bidirectional dashboard**:
+2. **Open the dashboard**:
 ```
-frontend/bidirectional-dashboard.html
+frontend/dashboard.html
 ```
 
 ### Mode 1: Non-Verbal → Verbal (Original)
@@ -425,8 +425,6 @@ Teacher sees: "Can you help me with math?"
 
 ### New Files
 - `backend/agents/gesture_agent.py` - Gesture translation logic
-- `frontend/bidirectional-dashboard.html` - New UI
-- `frontend/bidirectional.js` - Bidirectional functionality
 - `ENHANCEMENT_PLAN.md` - Detailed enhancement plan
 - `BIDIRECTIONAL_FEATURES.md` - This file
 
@@ -434,6 +432,9 @@ Teacher sees: "Can you help me with math?"
 - `backend/main.py` - Added new API endpoints
 - `backend/database/models.py` - Added new models
 - `backend/database/db.py` - Added gesture tables and methods
+- `frontend/dashboard.html` - Integrated bidirectional UI
+- `frontend/styles.css` - Added bidirectional styles
+- `frontend/app.js` - Added bidirectional functionality
 
 ## 🎓 Learning Resources
 
