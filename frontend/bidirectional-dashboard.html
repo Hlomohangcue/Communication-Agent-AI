@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Communication Bridge AI - Bidirectional</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .mode-btn:hover:not(.active) {
+            border-color: #667eea;
+            background: #f7fafc;
+        }
+        
+        .bidirectional-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .user-panel {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .user-panel h3 {
+            margin: 0 0 15px 0;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .gesture-display {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 100px;
+            font-size: 32px;
+            text-align: center;
+            margin: 15px 0;
+            line-height: 1.6;
+        }
+        
+        .gesture-display.empty {
+            font-size: 16px;
+            color: #a0aec0;
+            font-style: italic;
+        }
+        
+        .phrase-library {
+            margin-top: 15px;
+        }
+        
+        .phrase-category {
+            margin-bottom: 15px;
+        }
+        
+        .phrase-category h4 {
+            font-size: 14px;
+            color: #718096;
+            margin: 0 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .phrase-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .phrase-btn {
+            padding: 8px 12px;
+            background: #edf2f7;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        
+        .phrase-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .gesture-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+            gap: 8px;
+            margin-top: 15px;
+        }
+        
+        .gesture-btn {
+            padding: 10px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        
+        .gesture-btn:hover {
+            transform: scale(1.1);
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        
+        .gesture-btn.selected {
+            background: #667eea;
+            border-color: #667eea;
+        }
+        
+        .translation-result {
+            background: #c6f6d5;
+            border: 2px solid #9ae6b4;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .translation-result h4 {
+            margin: 0 0 10px 0;
+            color: #22543d;
+            font-size: 14px;
+        }
+        
+        .translation-method {
+            font-size: 12px;
+            color: #2f855a;
+            margin-top: 8px;
+        }
+        
+        @media (max-width: 1024px) {
+            .bidirectional-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌉 Communication Bridge AI</h1>
+            <p>Bidirectional Communication System</p>
+        </header>
+        
+        <!-- Mode Selector -->
+        <div class="mode-selector">
+            <button class="mode-btn active" id="mode-nonverbal-to-verbal">
+                👤 → 🗣️ Non-Verbal to Verbal
+            </button>
+            <button class="mode-btn" id="mode-verbal-to-nonverbal">
+                🗣️ → 👤 Verbal to Non-Verbal
+            </button>
+            <button class="mode-btn" id="mode-bidirectional">
+                ↔️ Bidirectional
+            </button>
+        </div>
+        
+        <!-- Session Controls -->
+        <div class="controls">
+            <button id="start-sim" class="btn-primary">Start Session</button>
+            <button id="stop-sim" class="btn-danger" style="display: none;">Stop Session</button>
+            <div id="session-id" class="session-info">No active session</div>
+        </div>
+        
+        <!-- Bidirectional Communication Container -->
+        <div class="bidirectional-container" id="bidirectional-view" style="display: none;">
+            <!-- Non-Verbal User Panel -->
+            <div class="user-panel">
+                <h3>👤 Non-Verbal User</h3>
+                
+                <div class="input-section">
+                    <h4>Input (Gestures/Emojis):</h4>
+                    <textarea id="nonverbal-input" placeholder="Select gestures or type emojis..." rows="3"></textarea>
+                    
+                    <div class="phrase-library">
+                        <h4>Quick Phrases:</h4>
+                        <div id="nonverbal-phrases"></div>
+                    </div>
+                    
+                    <div class="gesture-palette" id="gesture-palette"></div>
+                    
+                    <button id="send-nonverbal" class="btn-primary" style="margin-top: 15px; width: 100%;">
+                        Send to Verbal User
+                    </button>
+                </div>
+                
+                <div class="output-section" style="margin-top: 20px;">
+                    <h4>Received (from Verbal User):</h4>
+                    <div class="gesture-display empty" id="nonverbal-received">
+                        Waiting for messages...
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Verbal User Panel -->
+            <div class="user-panel">
+                <h3>🗣️ Verbal User</h3>
+                
+                <div class="input-section">
+                    <h4>Input (Text/Speech):</h4>
+                    <textarea id="verbal-input" placeholder="Type your message..." rows="3"></textarea>
+                    
+                    <div class="phrase-library">
+                        <h4>Quick Phrases:</h4>
+                        <div id="verbal-phrases"></div>
+                    </div>
+                    
+                    <button id="send-verbal" class="btn-primary" style="margin-top: 15px; width: 100%;">
+                        Send to Non-Verbal User
+                    </button>
+                </div>
+                
+                <div class="output-section" style="margin-top: 20px;">
+                    <h4>Translation to Gestures:</h4>
+                    <div class="gesture-display empty" id="verbal-gesture-output">
+                        Your message will be translated to gestures here...
+                    </div>
+                    <div id="translation-info" class="translation-method"></div>
+                </div>
+                
+                <div class="output-section" style="margin-top: 20px;">
+                    <h4>Received (from Non-Verbal User):</h4>
+                    <div class="message-display" id="verbal-received">
+                        Waiting for messages...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Original Single Direction View -->
+        <div id="single-direction-view">
+            <div class="dashboard-grid">
+                <div class="panel">
+                    <h2>📝 Student Input</h2>
+                    <div class="input-mode-toggle">
+                        <button class="mode-toggle-btn active" id="text-mode-btn">Text</button>
+                        <button class="mode-toggle-btn" id="speech-mode-btn">Speech</button>
+                    </div>
+                    
+                    <div id="text-input-mode">
+                        <div class="token-grid" id="token-grid"></div>
+                        <textarea id="student-input" placeholder="Type or select emoji tokens..." rows="4"></textarea>
+                    </div>
+                    
+                    <div id="speech-input-mode" style="display: none;">
+                        <div class="speech-controls">
+                            <button id="start-recording" class="btn-primary">🎤 Start Recording</button>
+                            <button id="stop-recording" class="btn-danger" style="display: none;">⏹️ Stop Recording</button>
+                        </div>
+                        <div id="recording-status" class="recording-status">Ready to record</div>
+                        <div id="speech-transcript" class="speech-transcript">Your speech will appear here...</div>
+                    </div>
+                    
+                    <button id="send-message" class="btn-primary" disabled>Send Message</button>
+                </div>
+                
+                <div class="panel">
+                    <h2>📊 Conversation History</h2>
+                    <div id="conversation-display" class="conversation-display"></div>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="panel">
+                    <h2>🔄 Agent Workflow</h2>
+                    <div id="workflow-display" class="workflow-display"></div>
+                </div>
+                
+                <div class="panel">
+                    <h2>📋 Agent Decision Logs</h2>
+                    <div class="logs-controls">
+                        <button id="refresh-logs" class="btn-secondary">Refresh</button>
+                        <button id="clear-logs" class="btn-secondary">Clear</button>
+                    </div>
+                    <div id="logs-display" class="logs-display"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+    <script src="bidirectional.js"></script>
+</body>
+</html>
