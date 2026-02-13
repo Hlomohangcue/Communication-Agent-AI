@@ -1,6 +1,16 @@
 # Communication Bridge AI
 
-Production-ready autonomous agent system for bridging communication between verbal and non-verbal users.
+Production-ready autonomous agent system for bridging communication between verbal and non-verbal users using AI-powered gesture recognition and translation.
+
+## 🌟 Features
+
+- **Bidirectional Communication**: Non-Verbal ↔ Verbal translation
+- **70+ Emoji Gestures**: ASL-based gesture system
+- **AI-Powered Responses**: Google Gemini integration
+- **User Authentication**: JWT-based auth with freemium credits
+- **Real-time Translation**: Instant phrase-to-gesture conversion
+- **Persistent Sessions**: Conversation history across modes
+- **Production Ready**: Deployed on Vultr VM with Nginx
 
 ## System Architecture
 
@@ -12,13 +22,14 @@ Production-ready autonomous agent system for bridging communication between verb
 - **Coordinator Agent**: Central decision-maker routing tasks between agents
 
 ### Tech Stack
-- **Backend**: Python FastAPI
-- **Frontend**: HTML, CSS, JavaScript
-- **AI**: Google Gemini API
-- **Database**: SQLite
-- **Deployment**: Vultr VM (Linux)
+- **Backend**: Python FastAPI + Uvicorn
+- **Frontend**: HTML, CSS, JavaScript (Vanilla)
+- **AI**: Google Gemini API (gemini-1.5-flash-latest)
+- **Database**: SQLite (production-ready)
+- **Authentication**: JWT + bcrypt
+- **Deployment**: Vultr VM + Nginx + Systemd
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Local Development
 
@@ -27,9 +38,13 @@ Production-ready autonomous agent system for bridging communication between verb
 pip install -r requirements.txt
 ```
 
-2. **Set Environment Variable**
+2. **Configure API Key**
 ```bash
-export GEMINI_API_KEY="your-api-key-here"
+# Copy example env file
+cp .env.example .env
+
+# Edit .env and add your Gemini API key
+nano .env
 ```
 
 3. **Run Backend**
@@ -38,11 +53,29 @@ cd backend
 python main.py
 ```
 
+Backend runs on: `http://localhost:8000`
+
 4. **Open Frontend**
-Open `frontend/index.html` in your browser or serve with:
+Open `frontend/login.html` in your browser or serve with:
 ```bash
 python -m http.server 8080 --directory frontend
 ```
+
+### Production Deployment (Vultr VM)
+
+#### Quick Deploy (Automated)
+```bash
+# On your Vultr VM:
+wget https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/deploy_vultr.sh
+chmod +x deploy_vultr.sh
+./deploy_vultr.sh
+```
+
+#### Manual Deploy
+See **[VULTR_DEPLOYMENT_COMPLETE.md](VULTR_DEPLOYMENT_COMPLETE.md)** for detailed step-by-step instructions.
+
+#### Quick Reference
+See **[DEPLOYMENT_QUICK_REFERENCE.md](DEPLOYMENT_QUICK_REFERENCE.md)** for common commands.
 
 ### Docker Deployment
 

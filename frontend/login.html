@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Communication Bridge AI</title>
+    <link rel="stylesheet" href="auth-styles.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>Communication Bridge AI</h1>
+                <p>Bridging communication between verbal and non-verbal users</p>
+            </div>
+            
+            <div class="auth-tabs">
+                <button class="tab-btn active" id="login-tab">Login</button>
+                <button class="tab-btn" id="signup-tab">Sign Up</button>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" placeholder="your@email.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                
+                <div class="form-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="remember-me">
+                        <span>Remember me</span>
+                    </label>
+                    <a href="#" class="forgot-link">Forgot password?</a>
+                </div>
+                
+                <button type="submit" class="btn-primary">Login</button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <button type="button" class="btn-social google">
+                    <span class="icon">G</span>
+                    Continue with Google
+                </button>
+            </form>
+            
+            <!-- Signup Form -->
+            <form id="signup-form" class="auth-form" style="display: none;">
+                <div class="form-group">
+                    <label for="signup-name">Full Name</label>
+                    <input type="text" id="signup-name" placeholder="John Doe" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="signup-email">Email</label>
+                    <input type="email" id="signup-email" placeholder="your@email.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="signup-password">Password</label>
+                    <input type="password" id="signup-password" placeholder="••••••••" required>
+                    <small>At least 8 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="signup-confirm">Confirm Password</label>
+                    <input type="password" id="signup-confirm" placeholder="••••••••" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="terms" required>
+                        <span>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn-primary">Create Account</button>
+                
+                <div class="freemium-info">
+                    <div class="info-badge">
+                        <span class="badge-icon">🎁</span>
+                        <div class="badge-text">
+                            <strong>Free Trial Included!</strong>
+                            <p>Get 100 free messages to try our service</p>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="auth-footer">
+                <p>Powered by AI • Secure & Private</p>
+            </div>
+        </div>
+        
+        <!-- Features Sidebar -->
+        <div class="features-sidebar">
+            <h2>Why Communication Bridge AI?</h2>
+            
+            <div class="feature-item">
+                <span class="feature-icon">🤝</span>
+                <div class="feature-content">
+                    <h3>Seamless Communication</h3>
+                    <p>Bridge the gap between verbal and non-verbal users with AI-powered translation</p>
+                </div>
+            </div>
+            
+            <div class="feature-item">
+                <span class="feature-icon">🎯</span>
+                <div class="feature-content">
+                    <h3>ASL Translation</h3>
+                    <p>Automatic American Sign Language gesture translation in real-time</p>
+                </div>
+            </div>
+            
+            <div class="feature-item">
+                <span class="feature-icon">📊</span>
+                <div class="feature-content">
+                    <h3>Conversation History</h3>
+                    <p>Track and review all communications with persistent storage</p>
+                </div>
+            </div>
+            
+            <div class="feature-item">
+                <span class="feature-icon">🔒</span>
+                <div class="feature-content">
+                    <h3>Secure & Private</h3>
+                    <p>Your data is encrypted and protected with enterprise-grade security</p>
+                </div>
+            </div>
+            
+            <div class="pricing-preview">
+                <h3>Pricing Plans</h3>
+                <div class="plan-card">
+                    <div class="plan-header">
+                        <h4>Free</h4>
+                        <p class="plan-price">$0<span>/month</span></p>
+                    </div>
+                    <ul class="plan-features">
+                        <li>✓ 100 messages/month</li>
+                        <li>✓ Basic ASL translation</li>
+                        <li>✓ 7-day history</li>
+                    </ul>
+                </div>
+                
+                <div class="plan-card featured">
+                    <div class="plan-badge">Popular</div>
+                    <div class="plan-header">
+                        <h4>Pro</h4>
+                        <p class="plan-price">$19<span>/month</span></p>
+                    </div>
+                    <ul class="plan-features">
+                        <li>✓ Unlimited messages</li>
+                        <li>✓ Advanced AI features</li>
+                        <li>✓ Unlimited history</li>
+                        <li>✓ Priority support</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notification" class="notification"></div>
+    
+    <script src="auth.js"></script>
+</body>
+</html>

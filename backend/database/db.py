@@ -13,13 +13,30 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
+        # Users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                plan TEXT DEFAULT 'free',
+                credits INTEGER DEFAULT 100,
+                created_at TEXT NOT NULL,
+                last_login TEXT,
+                is_active BOOLEAN DEFAULT 1
+            )
+        """)
+        
         # Sessions table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
+                user_id TEXT,
                 created_at TEXT NOT NULL,
                 metadata TEXT,
-                status TEXT DEFAULT 'active'
+                status TEXT DEFAULT 'active',
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
         
@@ -46,6 +63,33 @@ class Database:
                 data TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (session_id) REFERENCES sessions(id)
+            )
+        """)
+        
+        # Credits usage table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS credit_usage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                session_id TEXT,
+                credits_used INTEGER NOT NULL,
+                action_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (session_id) REFERENCES sessions(id)
+            )
+        """)
+        
+        # Subscriptions table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                plan TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                expires_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
         
@@ -100,7 +144,7 @@ class Database:
             for row in rows
         ]
     
-    def store_message(self, session_id: str, input_text: str, output_text: str, intent: str):
+    def store_message(self, session_id: str, input_text: str, output_text: str, intent: str, confidence: float = 1.0):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
@@ -297,5 +341,129 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute("UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?", (phrase_id,))
+        conn.commit()
+        conn.close()
+    
+    # User Management Methods
+    def create_user(self, user_id: str, email: str, name: str, password_hash: str):
+        """Create a new user"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, email, name, password_hash, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """Get user by email"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                "id": row["id"],
+                "email": row["email"],
+                "name": row["name"],
+                "password_hash": row["password_hash"],
+                "plan": row["plan"],
+                "credits": row["credits"],
+                "created_at": row["created_at"],
+                "last_login": row["last_login"],
+                "is_active": bool(row["is_active"])
+            }
+        return None
+    
+    def get_user_by_id(self, user_id: str) -> Optional[Dict]:
+        """Get user by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                "id": row["id"],
+                "email": row["email"],
+                "name": row["name"],
+                "plan": row["plan"],
+                "credits": row["credits"],
+                "created_at": row["created_at"],
+                "last_login": row["last_login"],
+                "is_active": bool(row["is_active"])
+            }
+        return None
+    
+    def update_last_login(self, user_id: str):
+        """Update user's last login timestamp"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET last_login = ? WHERE id = ?",
+            (datetime.utcnow().isoformat(), user_id)
+        )
+        conn.commit()
+        conn.close()
+    
+    def get_user_credits(self, user_id: str) -> int:
+        """Get user's remaining credits"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT credits FROM users WHERE id = ?", (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result[0] if result else 0
+    
+    def use_credits(self, user_id: str, amount: int, session_id: str = None, action_type: str = "message"):
+        """Deduct credits from user account"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Deduct credits
+        cursor.execute(
+            "UPDATE users SET credits = credits - ? WHERE id = ? AND credits >= ?",
+            (amount, user_id, amount)
+        )
+        
+        if cursor.rowcount == 0:
+            conn.close()
+            return False
+        
+        # Log credit usage
+        cursor.execute(
+            "INSERT INTO credit_usage (user_id, session_id, credits_used, action_type, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, session_id, amount, action_type, datetime.utcnow().isoformat())
+        )
+        
+        conn.commit()
+        conn.close()
+        return True
+    
+    def add_credits(self, user_id: str, amount: int):
+        """Add credits to user account"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET credits = credits + ? WHERE id = ?",
+            (amount, user_id)
+        )
+        conn.commit()
+        conn.close()
+    
+    def update_user_plan(self, user_id: str, plan: str):
+        """Update user's subscription plan"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET plan = ? WHERE id = ?",
+            (plan, user_id)
+        )
         conn.commit()
         conn.close()

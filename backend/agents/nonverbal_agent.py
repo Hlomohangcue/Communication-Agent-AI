@@ -77,10 +77,13 @@ Be concise and clear."""
                 response = self.model.generate_content(prompt)
                 result_text = response.text
                 
+                # Preserve original input in semantic meaning for emoji matching
+                semantic_with_input = f"{input_text} - {result_text}"
+                
                 return {
                     "original_input": input_text,
                     "tokens_detected": tokens_found,
-                    "semantic_meaning": result_text,
+                    "semantic_meaning": semantic_with_input,
                     "interpretation_method": "ai_enhanced"
                 }
             except Exception as e:
@@ -89,11 +92,14 @@ Be concise and clear."""
             return self._fallback_interpretation(input_text, tokens_found)
     
     def _fallback_interpretation(self, input_text: str, tokens_found: list) -> Dict[str, Any]:
+        # Preserve the original input as semantic meaning so speech agent can match emojis
         if tokens_found:
             meanings = [t["meaning"] for t in tokens_found]
-            semantic = f"User is expressing: {', '.join(meanings)}"
+            # Include both the original input AND the interpretation
+            semantic = f"{input_text} ({', '.join(meanings)})"
         else:
-            semantic = f"User says: {input_text}"
+            # For text input, just pass it through
+            semantic = input_text
         
         return {
             "original_input": input_text,

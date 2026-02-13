@@ -1,15 +1,17 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import uvicorn
 from datetime import datetime
+import uuid
 
 from coordinator.orchestrator import Coordinator
 from simulation.classroom_sim import ClassroomSimulation
 from database.db import Database
 from agents.gesture_agent import GestureAgent
+from auth.auth_handler import AuthHandler
 
 app = FastAPI(title="Communication Bridge AI")
 
@@ -26,6 +28,40 @@ db.init_gesture_tables()  # Initialize gesture tables
 coordinator = Coordinator(db)
 simulation = ClassroomSimulation(coordinator, db)
 gesture_agent = GestureAgent()
+auth_handler = AuthHandler()
+
+# Authentication dependency
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != 'bearer':
+            raise HTTPException(status_code=401, detail="Invalid authentication scheme")
+        
+        payload = auth_handler.decode_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        user_id = payload.get("sub")
+        user = db.get_user_by_id(user_id)
+        
+        if not user or not user.get("is_active"):
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+        
+        return user
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 class CommunicateRequest(BaseModel):
     input_text: str
@@ -45,22 +81,126 @@ class AddPhraseRequest(BaseModel):
     category: str
     gesture_sequence: Optional[str] = None
 
+class SaveMessageRequest(BaseModel):
+    session_id: str
+    input_text: str
+    output_text: str
+    intent: str = "manual_save"
+    confidence: float = 1.0
+
 @app.get("/")
 async def root():
     return {"status": "Communication Bridge AI is running", "version": "1.0.0"}
 
+# Authentication Endpoints
+
+@app.post("/auth/signup")
+async def signup(request: SignupRequest):
+    """Create a new user account"""
+    # Check if user already exists
+    existing_user = db.get_user_by_email(request.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Hash password
+    password_hash = auth_handler.hash_password(request.password)
+    
+    # Create user
+    user_id = str(uuid.uuid4())
+    db.create_user(user_id, request.email, request.name, password_hash)
+    
+    return {
+        "message": "User created successfully",
+        "user": {
+            "id": user_id,
+            "email": request.email,
+            "name": request.name,
+            "credits": 100
+        }
+    }
+
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """Login and get access token"""
+    # Get user
+    user = db.get_user_by_email(request.email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Verify password
+    if not auth_handler.verify_password(request.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Update last login
+    db.update_last_login(user["id"])
+    
+    # Create access token
+    token = auth_handler.create_access_token({"sub": user["id"]})
+    
+    return {
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "plan": user["plan"],
+            "credits": user["credits"]
+        }
+    }
+
+@app.get("/auth/verify")
+async def verify_token(current_user: dict = Depends(get_current_user)):
+    """Verify if token is valid"""
+    return {
+        "valid": True,
+        "user": current_user
+    }
+
+@app.get("/auth/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user information"""
+    return current_user
+
+@app.get("/auth/credits")
+async def get_credits(current_user: dict = Depends(get_current_user)):
+    """Get user's remaining credits"""
+    credits = db.get_user_credits(current_user["id"])
+    return {
+        "credits": credits,
+        "plan": current_user["plan"]
+    }
+
 @app.post("/simulate/start")
-async def start_simulation():
+async def start_simulation(current_user: dict = Depends(get_current_user)):
     session_id = simulation.start_session()
     return {
         "session_id": session_id,
         "status": "started",
-        "message": "Classroom simulation initialized"
+        "message": "Classroom simulation initialized",
+        "user_credits": db.get_user_credits(current_user["id"])
     }
 
 @app.post("/simulate/step")
-async def simulation_step(request: SimulationStepRequest):
+async def simulation_step(request: SimulationStepRequest, current_user: dict = Depends(get_current_user)):
+    # Check if user has credits (unless they're on pro plan)
+    if current_user["plan"] == "free":
+        credits = db.get_user_credits(current_user["id"])
+        if credits < 1:
+            raise HTTPException(
+                status_code=402,
+                detail="Insufficient credits. Please upgrade to Pro plan for unlimited messages."
+            )
+        
+        # Use 1 credit
+        if not db.use_credits(current_user["id"], 1, request.session_id, "message"):
+            raise HTTPException(status_code=402, detail="Failed to deduct credits")
+    
     result = await simulation.process_step(request.session_id, request.input_text)
+    
+    # Add remaining credits to response
+    remaining_credits = db.get_user_credits(current_user["id"])
+    result["user_credits"] = remaining_credits
+    
     return result
 
 @app.post("/communicate")
@@ -89,6 +229,21 @@ async def get_session(session_id: str):
 async def list_sessions(limit: int = 20):
     sessions = db.get_recent_sessions(limit)
     return {"sessions": sessions}
+
+@app.post("/save_message")
+async def save_message(request: SaveMessageRequest):
+    """Save a message directly to the database (for verbal-to-nonverbal mode)"""
+    try:
+        db.store_message(
+            session_id=request.session_id,
+            input_text=request.input_text,
+            output_text=request.output_text,
+            intent=request.intent,
+            confidence=request.confidence
+        )
+        return {"success": True, "message": "Message saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Gesture Translation Endpoints
 

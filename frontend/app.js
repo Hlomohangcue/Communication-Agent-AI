@@ -7,11 +7,331 @@ let currentInputMode = 'text'; // 'text' or 'speech'
 let recognition = null;
 let isRecording = false;
 let finalTranscript = '';  // Track transcript across recognition restarts
+let authToken = null;  // Store auth token
+let currentUser = null;  // Store current user info
 
-// Bidirectional communication variables
+// Communication mode variables
 let currentMode = 'nonverbal-to-verbal';
 let gestures = {};
 let commonPhrases = {};
+
+// Get auth token from storage
+function getAuthToken() {
+    return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+}
+
+// Get auth headers
+function getAuthHeaders() {
+    const token = getAuthToken();
+    return {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+}
+
+// Check authentication on page load
+async function checkAuthentication() {
+    const token = getAuthToken();
+    
+    if (!token) {
+        // No token, redirect to login
+        window.location.href = 'login.html';
+        return false;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (!response.ok) {
+            // Token invalid, redirect to login
+            localStorage.removeItem('authToken');
+            sessionStorage.removeItem('authToken');
+            window.location.href = 'login.html';
+            return false;
+        }
+        
+        currentUser = await response.json();
+        console.log('Authenticated user:', currentUser);
+        
+        // Update user info in UI
+        updateUserInfo();
+        
+        // Load user credits
+        await loadUserCredits();
+        
+        return true;
+    } catch (error) {
+        console.error('Authentication check failed:', error);
+        window.location.href = 'login.html';
+        return false;
+    }
+}
+
+// Update user info in UI
+function updateUserInfo() {
+    if (!currentUser) return;
+    
+    const userName = document.querySelector('.user-name');
+    const userRole = document.querySelector('.user-role');
+    
+    if (userName) {
+        userName.textContent = currentUser.name || 'User';
+    }
+    
+    if (userRole) {
+        if (currentMode === 'verbal-to-nonverbal') {
+            userRole.textContent = 'Verbal Teacher';
+        } else {
+            userRole.textContent = 'Non-Verbal Communicator';
+        }
+    }
+}
+
+// Load user credits
+async function loadUserCredits() {
+    try {
+        const response = await fetch(`${API_BASE}/auth/credits`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('User credits:', data);
+            
+            // Display credits in UI
+            if (data.plan === 'free') {
+                const creditsDisplay = document.getElementById('credits-display');
+                if (creditsDisplay) {
+                    creditsDisplay.textContent = `${data.credits} messages left`;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load credits:', error);
+    }
+}
+
+// Logout function
+function logout() {
+    localStorage.removeItem('authToken');
+    sessionStorage.removeItem('authToken');
+    localStorage.removeItem('userId');
+    sessionStorage.removeItem('userId');
+    window.location.href = 'login.html';
+}
+
+// Common phrases for verbal to non-verbal communication
+const COMMON_PHRASES = [
+    // Greetings
+    "Hello",
+    "Hi",
+    "Good morning",
+    "Good afternoon",
+    "Good night",
+    "Goodbye",
+    "See you tomorrow",
+    
+    // Polite Expressions
+    "Please",
+    "Thank you",
+    "Yes",
+    "No",
+    "You're welcome",
+    
+    // Classroom Instructions
+    "Please sit down",
+    "Stand up",
+    "Please be quiet",
+    "Listen carefully",
+    "Look at the board",
+    "Open your books",
+    "Read the page",
+    "Write in your notebook",
+    "Take out your pencils",
+    "Put away your paper",
+    
+    // Questions & Help
+    "Raise your hand if you have a question",
+    "Do you have any questions",
+    "Do you need help",
+    "Can you repeat that",
+    "Do you understand",
+    "Show me your work",
+    "Tell me your answer",
+    
+    // Time & Schedule
+    "It's time to begin",
+    "Let's start",
+    "Time to stop",
+    "We're done for today",
+    "Time for a break",
+    "Lunch time",
+    "See you tomorrow",
+    "Homework is due tomorrow",
+    
+    // Feedback & Encouragement
+    "Good job",
+    "Great job",
+    "Excellent work",
+    "Well done",
+    "Keep trying",
+    "You can do it",
+    "That's correct",
+    "Try again",
+    
+    // Classroom Management
+    "Pay attention please",
+    "Eyes on me",
+    "Work with your partner",
+    "Join your group",
+    "Line up please",
+    "Clean up your desk",
+    "Put your things away",
+    "Get ready to go",
+    
+    // Activities
+    "Time to study",
+    "Let's review",
+    "Practice your reading",
+    "Work on your art project",
+    "Time to play",
+    "Go to your seat",
+    "Come to the front",
+    
+    // Basic Needs
+    "You may go to the bathroom",
+    "Are you hungry",
+    "Do you need water",
+    "Are you feeling tired",
+    "Are you feeling sick",
+    "Do you need a break",
+    
+    // Emotions & Feelings
+    "Are you happy",
+    "What's wrong",
+    "Don't be sad",
+    "It's okay",
+    "I'm sorry",
+    "Don't worry",
+    "Are you angry",
+    "Calm down please",
+    
+    // Common Responses
+    "I understand",
+    "I see",
+    "That's right",
+    "Not quite",
+    "Let me help you",
+    "Ask me if you need help",
+    "Think about it",
+    "Take your time"
+];
+
+// ASL (American Sign Language) emoji mappings
+const ASL_MAPPINGS = {
+    // Greetings
+    'hello': '👋',
+    'hi': '👋',
+    'good morning': '☀️👋',
+    'good afternoon': '🌤️👋',
+    'good night': '🌙👋',
+    'goodbye': '👋✌️',
+    'see you': '👋',
+    
+    // Common classroom phrases
+    'please': '🙏',
+    'thank you': '🙏❤️',
+    'yes': '👍',
+    'no': '👎',
+    'sit': '🪑',
+    'sit down': '🪑⬇️',
+    'stand': '🧍',
+    'stand up': '🧍⬆️',
+    'quiet': '🤫',
+    'be quiet': '🤫',
+    'listen': '👂',
+    'look': '👀',
+    'read': '📖',
+    'write': '✍️',
+    'open': '📖➡️',
+    'close': '📖⬅️',
+    'book': '📖',
+    'books': '📚',
+    'pencil': '✏️',
+    'pencils': '✏️✏️',
+    'paper': '📄',
+    
+    // Actions
+    'raise hand': '🙋',
+    'raise your hand': '🙋',
+    'question': '❓',
+    'questions': '❓❓',
+    'answer': '💬',
+    'help': '🆘',
+    'work': '💼',
+    'study': '📚',
+    'learn': '🎓',
+    'think': '🤔',
+    'understand': '💡',
+    'repeat': '🔄',
+    'again': '🔄',
+    
+    // Time related
+    'time': '⏰',
+    'break': '☕',
+    'lunch': '🍽️',
+    'lunch time': '🍽️⏰',
+    'tomorrow': '📅➡️',
+    'today': '📅',
+    'now': '⏰',
+    'later': '⏰➡️',
+    'begin': '▶️',
+    'start': '▶️',
+    'stop': '⏹️',
+    'finish': '✅',
+    'done': '✅',
+    
+    // Emotions & Feedback
+    'good': '👍',
+    'great': '👍⭐',
+    'excellent': '⭐⭐⭐',
+    'great job': '👍⭐',
+    'well done': '👏',
+    'happy': '😊',
+    'sad': '😢',
+    'sorry': '😔',
+    
+    // Classroom management
+    'attention': '👀⚠️',
+    'pay attention': '👀⚠️',
+    'class': '👥',
+    'partner': '👥',
+    'group': '👥👥',
+    'line up': '➡️➡️➡️',
+    'clean up': '🧹',
+    'homework': '📝🏠',
+    'review': '🔄📚',
+    
+    // Common words
+    'you': '👉',
+    'me': '👈',
+    'we': '👥',
+    'they': '👉👥',
+    'have': '🤲',
+    'need': '🙏',
+    'want': '🙏',
+    'can': '💪',
+    'do': '✅',
+    'go': '➡️',
+    'come': '⬅️',
+    'take': '🤲',
+    'give': '🤲➡️',
+    'show': '👁️',
+    'tell': '💬'
+};
 
 // Initialize speech recognition if available
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -198,20 +518,34 @@ function addConversationMessage(type, message, metadata = {}) {
     item.style.opacity = '0';
     
     if (type === 'student') {
+        // Check if this is a gesture message (contains emojis or is from translation)
+        const isGestureMessage = metadata.originalText || /[\u{1F300}-\u{1F9FF}]/u.test(message);
+        
+        let displayMessage = message;
+        let metaInfo = `Non-Verbal User • ${new Date().toLocaleTimeString()}`;
+        
+        if (metadata.originalText) {
+            // This is a translated gesture from verbal user
+            metaInfo += ` • Translated from: "${metadata.originalText}"`;
+        }
+        
         item.innerHTML = `
             <div class="message-student">
-                <div class="message-bubble">${message}</div>
+                <div class="message-bubble">${displayMessage}</div>
             </div>
-            <div class="message-meta" style="text-align: right;">You • ${new Date().toLocaleTimeString()}</div>
+            <div class="message-meta" style="text-align: right;">${metaInfo}</div>
         `;
     } else if (type === 'teacher') {
         const intent = metadata.intent ? ` • ${metadata.intent}` : '';
         const confidence = metadata.confidence ? ` (${(metadata.confidence * 100).toFixed(0)}%)` : '';
+        const gestures = metadata.gestures ? ` • Gestures: ${metadata.gestures}` : '';
+        const method = metadata.method ? ` • ${metadata.method}` : '';
+        
         item.innerHTML = `
             <div class="message-teacher">
                 <div class="message-bubble">${message}</div>
             </div>
-            <div class="message-meta" style="text-align: left;">Teacher • ${new Date().toLocaleTimeString()}${intent}${confidence}</div>
+            <div class="message-meta" style="text-align: left;">Verbal User • ${new Date().toLocaleTimeString()}${intent}${confidence}${gestures}${method}</div>
         `;
     }
     
@@ -234,10 +568,15 @@ function addConversationMessage(type, message, metadata = {}) {
 }
 
 async function loadConversationHistory(sessionId) {
+    console.log('=== LOAD CONVERSATION HISTORY CALLED ===');
+    console.log('Session ID:', sessionId);
+    console.log('Stack trace:', new Error().stack);
     console.log('Loading conversation history for session:', sessionId);
     
     try {
-        const response = await fetch(`${API_BASE}/session/${sessionId}`);
+        const response = await fetch(`${API_BASE}/session/${sessionId}`, {
+            headers: getAuthHeaders()
+        });
         if (!response.ok) {
             console.error('Failed to load conversation history');
             return;
@@ -252,6 +591,8 @@ async function loadConversationHistory(sessionId) {
             return;
         }
         
+        console.log('⚠️ CLEARING CONVERSATION DISPLAY - Current message count:', conversationDisplay.children.length);
+        
         // Clear and rebuild conversation
         conversationDisplay.innerHTML = '';
         
@@ -259,17 +600,40 @@ async function loadConversationHistory(sessionId) {
             // Messages are returned newest first, so reverse them
             const messages = data.messages.reverse();
             
+            console.log(`Rebuilding conversation with ${messages.length} messages from database`);
+            
             messages.forEach(msg => {
-                // Add student message
-                addConversationMessage('student', msg.input_text);
-                
-                // Add teacher response
-                addConversationMessage('teacher', msg.output_text, {
-                    intent: msg.intent
-                });
+                // Check if this is a verbal-to-nonverbal message
+                if (msg.intent === 'verbal_to_nonverbal_translation') {
+                    // This is a teacher→student message with ASL translation
+                    // input_text contains "[Teacher] ..." and output_text contains "[ASL] ..."
+                    const teacherText = msg.input_text.replace('[Teacher] ', '');
+                    const aslText = msg.output_text.replace('[ASL] ', '');
+                    
+                    console.log('Loading verbal→nonverbal message:', { teacherText, aslText });
+                    
+                    // Add teacher message first
+                    addConversationMessage('teacher', teacherText);
+                    
+                    // Add ASL translation as student message
+                    addConversationMessage('student', aslText, {
+                        originalText: teacherText
+                    });
+                } else {
+                    // Regular non-verbal to verbal message
+                    console.log('Loading nonverbal→verbal message:', { input: msg.input_text, output: msg.output_text });
+                    
+                    // Add non-verbal user message (student)
+                    addConversationMessage('student', msg.input_text);
+                    
+                    // Add verbal user response (teacher)
+                    addConversationMessage('teacher', msg.output_text, {
+                        intent: msg.intent
+                    });
+                }
             });
             
-            console.log(`Loaded ${messages.length} conversation pairs`);
+            console.log(`✅ Loaded ${messages.length} conversation pairs`);
         } else {
             conversationDisplay.innerHTML = '<div style="padding: 15px; color: #999; text-align: center;">No messages yet. Start the conversation!</div>';
         }
@@ -280,8 +644,14 @@ async function loadConversationHistory(sessionId) {
 }
 
 // Restore session on page load
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM Content Loaded');
+    
+    // Check authentication first
+    const isAuthenticated = await checkAuthentication();
+    if (!isAuthenticated) {
+        return; // Will redirect to login
+    }
     
     const savedSessionId = sessionStorage.getItem('sessionId');
     const savedIsActive = sessionStorage.getItem('isActive');
@@ -513,22 +883,39 @@ function stopRecording() {
 }
 
 function getCurrentInput() {
-    if (currentInputMode === 'text') {
-        return document.getElementById('student-input').value;
+    if (currentMode === 'verbal-to-nonverbal') {
+        // In verbal-to-nonverbal mode, get input from verbal teacher input
+        const verbalInput = document.getElementById('verbal-teacher-input');
+        return verbalInput ? verbalInput.value : '';
     } else {
-        return document.getElementById('speech-transcript').textContent;
+        // In nonverbal-to-verbal mode, use existing logic
+        if (currentInputMode === 'text') {
+            return document.getElementById('student-input').value;
+        } else {
+            return document.getElementById('speech-transcript').textContent;
+        }
     }
 }
 
 function clearCurrentInput() {
-    if (currentInputMode === 'text') {
-        setTimeout(() => {
-            document.getElementById('student-input').value = '';
-            document.getElementById('student-input').focus();
-        }, 500);
+    if (currentMode === 'verbal-to-nonverbal') {
+        const verbalInput = document.getElementById('verbal-teacher-input');
+        if (verbalInput) {
+            setTimeout(() => {
+                verbalInput.value = '';
+                verbalInput.focus();
+            }, 500);
+        }
     } else {
-        finalTranscript = '';  // Clear the global transcript
-        document.getElementById('speech-transcript').textContent = '';
+        if (currentInputMode === 'text') {
+            setTimeout(() => {
+                document.getElementById('student-input').value = '';
+                document.getElementById('student-input').focus();
+            }, 500);
+        } else {
+            finalTranscript = '';  // Clear the global transcript
+            document.getElementById('speech-transcript').textContent = '';
+        }
     }
 }
 
@@ -559,9 +946,7 @@ async function startSimulation() {
     try {
         const response = await fetch(`${API_BASE}/simulate/start`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            headers: getAuthHeaders()
         });
         
         if (!response.ok) {
@@ -675,11 +1060,12 @@ async function sendMessage() {
     const input = getCurrentInput();
     
     console.log('Input value:', input);
+    console.log('Current mode:', currentMode);
     console.log('simulationActive:', simulationActive);
     console.log('currentSessionId:', currentSessionId);
     
     if (!input.trim()) {
-        showNotification('Please enter a message or select a token', 'warning');
+        showNotification('Please enter a message or select a phrase', 'warning');
         return;
     }
     
@@ -701,78 +1087,129 @@ async function sendMessage() {
     try {
         console.log('Sending message to API:', input);
         
-        // Add student message to conversation
-        addConversationMessage('student', input);
-        
-        // Show student input in workflow
-        addWorkflowItem('Student', `Sent: "${input.substring(0, 30)}${input.length > 30 ? '...' : ''}"`);
-        
-        const requestBody = {
-            session_id: currentSessionId,
-            input_text: input
-        };
-        
-        console.log('Request body:', requestBody);
-        
-        const response = await fetch(`${API_BASE}/simulate/step`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Response error:', errorText);
-            throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-        }
-        
-        const responseText = await response.text();
-        console.log('Raw response text:', responseText);
-        
-        const data = JSON.parse(responseText);
-        console.log('Parsed response data:', data);
-        
-        // Check if we have the expected data structure
-        if (!data.communication_result) {
-            console.error('Missing communication_result in response:', data);
-            throw new Error('Invalid response format');
-        }
-        
-        console.log('=== DISPLAYING RESULTS ===');
-        console.log('Teacher output:', data.communication_result.output);
-        
-        // Add teacher message to conversation history
-        console.log('Adding teacher message to conversation...');
-        addConversationMessage('teacher', data.communication_result.output, {
-            intent: data.communication_result.intent,
-            confidence: data.communication_result.confidence
-        });
-        
-        // Add workflow steps with delay for visibility
-        if (data.simulation_steps && Array.isArray(data.simulation_steps)) {
-            console.log('Adding workflow steps:', data.simulation_steps.length);
-            for (let i = 0; i < data.simulation_steps.length; i++) {
-                await new Promise(resolve => setTimeout(resolve, 200));
-                const step = data.simulation_steps[i];
-                console.log('Adding step:', step);
-                addWorkflowItem(step.actor, step.action);
+        if (currentMode === 'verbal-to-nonverbal') {
+            // Verbal to Non-Verbal Mode: Translate to ASL
+            console.log('Translating to ASL...');
+            
+            // Translate to ASL
+            const aslTranslation = translateToASL(input);
+            console.log('ASL Translation:', aslTranslation);
+            
+            // Save to database by sending to backend
+            // We'll send the teacher's text as input and ASL as the "response"
+            const requestBody = {
+                session_id: currentSessionId,
+                input_text: `[Teacher] ${input}`,  // Mark it as from teacher
+                output_text: `[ASL] ${aslTranslation}`,  // Mark as ASL translation
+                intent: 'verbal_to_nonverbal_translation',
+                confidence: 1.0
+            };
+            
+            console.log('Saving verbal-to-nonverbal message to database');
+            
+            try {
+                // Save to database via a direct database call
+                const saveResponse = await fetch(`${API_BASE}/save_message`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (saveResponse.ok) {
+                    console.log('Message saved to database successfully');
+                } else {
+                    console.warn('Failed to save to database:', await saveResponse.text());
+                }
+            } catch (saveError) {
+                console.error('Error saving to database:', saveError);
+                // Continue anyway - message will still display locally
             }
+            
+            // Add teacher's verbal message to conversation
+            addConversationMessage('teacher', input);
+            addWorkflowItem('Teacher', `Said: "${input.substring(0, 30)}${input.length > 30 ? '...' : ''}"`);
+            
+            // Add ASL translation as student message
+            addConversationMessage('student', aslTranslation, {
+                originalText: input
+            });
+            
+            addWorkflowItem('AI System', 'Translated to ASL gestures');
+            addWorkflowItem('Non-Verbal Student', `Received: ${aslTranslation}`);
+            
+            showNotification('Message translated to ASL and saved!', 'success');
+            
         } else {
-            console.warn('No simulation_steps in response');
-        }
-        
-        // Show intent and confidence in workflow
-        if (data.communication_result) {
-            const result = data.communication_result;
-            addWorkflowItem('AI System', 
-                `Detected: ${result.intent} (${(result.confidence * 100).toFixed(0)}% confidence)`
-            );
+            // Non-Verbal to Verbal Mode: Original behavior
+            // Add student message to conversation
+            addConversationMessage('student', input);
+            
+            // Show student input in workflow
+            addWorkflowItem('Student', `Sent: "${input.substring(0, 30)}${input.length > 30 ? '...' : ''}"`);
+            
+            const requestBody = {
+                session_id: currentSessionId,
+                input_text: input
+            };
+            
+            console.log('Request body:', requestBody);
+            
+            const response = await fetch(`${API_BASE}/simulate/step`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(requestBody)
+            });
+            
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Response error:', errorText);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+            }
+            
+            const responseText = await response.text();
+            console.log('Raw response text:', responseText);
+            
+            const data = JSON.parse(responseText);
+            console.log('Parsed response data:', data);
+            
+            // Check if we have the expected data structure
+            if (!data.communication_result) {
+                console.error('Missing communication_result in response:', data);
+                throw new Error('Invalid response format');
+            }
+            
+            console.log('=== DISPLAYING RESULTS ===');
+            console.log('Teacher output:', data.communication_result.output);
+            
+            // Add teacher message to conversation history
+            console.log('Adding teacher message to conversation...');
+            addConversationMessage('teacher', data.communication_result.output, {
+                intent: data.communication_result.intent,
+                confidence: data.communication_result.confidence
+            });
+            
+            // Add workflow steps with delay for visibility
+            if (data.simulation_steps && Array.isArray(data.simulation_steps)) {
+                console.log('Adding workflow steps:', data.simulation_steps.length);
+                for (let i = 0; i < data.simulation_steps.length; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    const step = data.simulation_steps[i];
+                    console.log('Adding step:', step);
+                    addWorkflowItem(step.actor, step.action);
+                }
+            } else {
+                console.warn('No simulation_steps in response');
+            }
+            
+            // Show intent and confidence in workflow
+            if (data.communication_result) {
+                const result = data.communication_result;
+                addWorkflowItem('AI System', 
+                    `Detected: ${result.intent} (${(result.confidence * 100).toFixed(0)}% confidence)`
+                );
+            }
         }
         
         // Clear input based on mode
@@ -902,7 +1339,7 @@ document.head.appendChild(style);
 
 
 // ============================================
-// BIDIRECTIONAL COMMUNICATION FEATURES
+// MODE SWITCHING FEATURES
 // ============================================
 
 // Load gestures and phrases on page load
@@ -931,8 +1368,7 @@ async function loadPhrases() {
 function setupModeSwitching() {
     const modeButtons = {
         'mode-nonverbal-to-verbal': 'nonverbal-to-verbal',
-        'mode-verbal-to-nonverbal': 'verbal-to-nonverbal',
-        'mode-bidirectional': 'bidirectional'
+        'mode-verbal-to-nonverbal': 'verbal-to-nonverbal'
     };
     
     Object.keys(modeButtons).forEach(btnId => {
@@ -942,53 +1378,143 @@ function setupModeSwitching() {
                 currentMode = modeButtons[btnId];
                 
                 // Update active button
-                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.mode-selector .mode-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 
-                // Show/hide appropriate views
-                const bidirectionalView = document.getElementById('bidirectional-view');
-                const singleDirectionView = document.getElementById('single-direction-view');
+                // IMPORTANT: We do NOT clear the conversation history when switching modes
+                // The conversation display persists across mode changes
                 
-                if (currentMode === 'bidirectional' || currentMode === 'verbal-to-nonverbal') {
-                    bidirectionalView.style.display = 'block';
-                    singleDirectionView.style.display = 'none';
+                // Update UI based on mode
+                const simulationTitle = document.getElementById('simulation-title');
+                const inputTitle = document.getElementById('input-title');
+                const textInputMode = document.getElementById('text-input-mode');
+                const commonPhrasesSection = document.getElementById('common-phrases-section');
+                const speechInputMode = document.getElementById('speech-input-mode');
+                const inputModeToggle = document.querySelector('.input-mode-toggle');
+                const userRole = document.querySelector('.user-role');
+                const userName = document.querySelector('.user-name');
+                
+                if (currentMode === 'verbal-to-nonverbal') {
+                    // Verbal to Non-Verbal Mode
+                    if (simulationTitle) simulationTitle.textContent = 'Verbal to Non-Verbal Communication';
+                    if (inputTitle) inputTitle.textContent = 'Verbal Teacher Input';
+                    if (userRole) userRole.textContent = 'Verbal Teacher';
+                    if (userName) userName.textContent = 'Teacher User';
+                    
+                    // Hide emoji tokens and speech mode
+                    if (textInputMode) textInputMode.style.display = 'none';
+                    if (speechInputMode) speechInputMode.style.display = 'none';
+                    if (inputModeToggle) inputModeToggle.style.display = 'none';
+                    
+                    // Show common phrases
+                    if (commonPhrasesSection) {
+                        commonPhrasesSection.style.display = 'block';
+                        renderCommonPhrases();
+                    }
+                    
+                    showNotification('Switched to Verbal → Non-Verbal mode. Output will be translated to ASL gestures.', 'info');
                 } else {
-                    bidirectionalView.style.display = 'none';
-                    singleDirectionView.style.display = 'block';
+                    // Non-Verbal to Verbal Mode
+                    if (simulationTitle) simulationTitle.textContent = 'Non-Verbal to Verbal Communication';
+                    if (inputTitle) inputTitle.textContent = 'Non-Verbal Student Input';
+                    if (userRole) userRole.textContent = 'Non-Verbal Communicator';
+                    if (userName) userName.textContent = 'Student User';
+                    
+                    // Show emoji tokens and speech toggle
+                    if (textInputMode) textInputMode.style.display = 'block';
+                    if (inputModeToggle) inputModeToggle.style.display = 'flex';
+                    
+                    // Hide common phrases
+                    if (commonPhrasesSection) commonPhrasesSection.style.display = 'none';
+                    
+                    // Make sure speech mode is hidden by default
+                    if (speechInputMode) speechInputMode.style.display = 'none';
+                    
+                    showNotification('Switched to Non-Verbal → Verbal mode', 'info');
                 }
+                
+                console.log(`Mode switched to: ${currentMode}. Conversation history preserved.`);
             });
         }
     });
 }
 
-function setupBidirectionalControls() {
-    // Send from non-verbal user
-    const sendNonverbalBtn = document.getElementById('send-nonverbal');
-    if (sendNonverbalBtn) {
-        sendNonverbalBtn.addEventListener('click', async () => {
-            const input = document.getElementById('nonverbal-input').value;
-            if (!input.trim()) {
-                showNotification('Please enter a message', 'warning');
-                return;
+function renderCommonPhrases() {
+    const container = document.getElementById('common-phrases-buttons');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    COMMON_PHRASES.forEach(phrase => {
+        const btn = document.createElement('button');
+        btn.className = 'phrase-btn';
+        btn.textContent = phrase;
+        btn.type = 'button';
+        btn.addEventListener('click', () => {
+            const input = document.getElementById('verbal-teacher-input');
+            if (input) {
+                input.value = phrase;
+                input.focus();
             }
-            
-            await sendNonverbalMessage(input);
         });
+        container.appendChild(btn);
+    });
+}
+
+function translateToASL(text) {
+    if (!text || !text.trim()) return '';
+    
+    const lowerText = text.toLowerCase();
+    let aslOutput = [];
+    
+    // Try to match phrases first (longer matches first)
+    const sortedPhrases = Object.keys(ASL_MAPPINGS).sort((a, b) => b.length - a.length);
+    
+    let remainingText = lowerText;
+    let matched = true;
+    
+    while (matched && remainingText.length > 0) {
+        matched = false;
+        remainingText = remainingText.trim();
+        
+        for (const phrase of sortedPhrases) {
+            if (remainingText.startsWith(phrase)) {
+                aslOutput.push(ASL_MAPPINGS[phrase]);
+                remainingText = remainingText.substring(phrase.length);
+                matched = true;
+                break;
+            }
+        }
+        
+        // If no match found, skip one word
+        if (!matched && remainingText.length > 0) {
+            const nextSpace = remainingText.indexOf(' ');
+            if (nextSpace > 0) {
+                remainingText = remainingText.substring(nextSpace + 1);
+                matched = true;
+            } else {
+                break;
+            }
+        }
     }
     
-    // Send from verbal user
-    const sendVerbalBtn = document.getElementById('send-verbal');
-    if (sendVerbalBtn) {
-        sendVerbalBtn.addEventListener('click', async () => {
-            const input = document.getElementById('verbal-input').value;
-            if (!input.trim()) {
-                showNotification('Please enter a message', 'warning');
-                return;
-            }
-            
-            await sendVerbalMessage(input);
-        });
+    // If we got some translations, return them
+    if (aslOutput.length > 0) {
+        return aslOutput.join(' ');
     }
+    
+    // Fallback: try word by word
+    const words = lowerText.split(/\s+/);
+    const translations = [];
+    
+    for (const word of words) {
+        const cleanWord = word.replace(/[.,!?;:]/g, '');
+        if (ASL_MAPPINGS[cleanWord]) {
+            translations.push(ASL_MAPPINGS[cleanWord]);
+        }
+    }
+    
+    return translations.length > 0 ? translations.join(' ') : '🤷 (No direct ASL translation available)';
 }
 
 function renderGesturePalette() {
@@ -1113,6 +1639,9 @@ function renderPhrasesLibrary() {
 
 async function sendNonverbalMessage(input) {
     try {
+        // Add to conversation history immediately
+        addConversationMessage('student', input);
+        
         // Use existing communication endpoint
         const response = await fetch(`${API_BASE}/simulate/step`, {
             method: 'POST',
@@ -1127,19 +1656,11 @@ async function sendNonverbalMessage(input) {
         
         const data = await response.json();
         
-        // Display in verbal user's received area
-        const verbalReceived = document.getElementById('verbal-received');
-        if (verbalReceived) {
-            verbalReceived.innerHTML = `
-                <div style="background: #edf2f7; padding: 15px; border-radius: 8px; margin-top: 10px;">
-                    <div style="font-size: 24px; margin-bottom: 10px;">${input}</div>
-                    <div style="color: #2d3748; font-size: 16px;">${data.communication_result.output}</div>
-                    <div style="color: #718096; font-size: 12px; margin-top: 8px;">
-                        Intent: ${data.communication_result.intent} (${(data.communication_result.confidence * 100).toFixed(0)}%)
-                    </div>
-                </div>
-            `;
-        }
+        // Add teacher response to conversation history
+        addConversationMessage('teacher', data.communication_result.output, {
+            intent: data.communication_result.intent,
+            confidence: data.communication_result.confidence
+        });
         
         // Clear input
         document.getElementById('nonverbal-input').value = '';
@@ -1167,27 +1688,16 @@ async function sendVerbalMessage(text) {
         
         const data = await response.json();
         
-        // Display gesture translation
-        const gestureOutput = document.getElementById('verbal-gesture-output');
-        if (gestureOutput) {
-            gestureOutput.className = 'gesture-display';
-            gestureOutput.textContent = data.gesture_sequence;
-        }
+        // Add verbal user's text message to conversation history (as teacher/verbal user)
+        addConversationMessage('teacher', text, {
+            method: `Translated to: ${data.gesture_sequence}`
+        });
         
-        const translationInfo = document.getElementById('translation-info');
-        if (translationInfo) {
-            translationInfo.textContent = `Translation method: ${data.method} - ${data.explanation}`;
-        }
-        
-        // Display in non-verbal user's received area
-        const nonverbalReceived = document.getElementById('nonverbal-received');
-        if (nonverbalReceived) {
-            nonverbalReceived.className = 'gesture-display';
-            nonverbalReceived.innerHTML = `
-                <div style="font-size: 32px; margin-bottom: 10px;">${data.gesture_sequence}</div>
-                <div style="font-size: 14px; color: #718096;">"${text}"</div>
-            `;
-        }
+        // Add gesture translation as non-verbal user's view (as student)
+        addConversationMessage('student', data.gesture_sequence, {
+            originalText: text,
+            translationMethod: data.method
+        });
         
         // Clear input
         document.getElementById('verbal-input').value = '';
@@ -1199,19 +1709,11 @@ async function sendVerbalMessage(text) {
     }
 }
 
-// Initialize bidirectional features when page loads
+// Initialize mode switching when page loads
 window.addEventListener('DOMContentLoaded', async () => {
-    // Load gestures and phrases
-    await loadGestures();
-    await loadPhrases();
-    
     // Setup mode switching
     setupModeSwitching();
     
-    // Setup bidirectional controls
-    setupBidirectionalControls();
-    
-    // Initialize gesture palette and phrases
-    renderGesturePalette();
-    renderPhrasesLibrary();
+    // Render common phrases (hidden by default)
+    renderCommonPhrases();
 });
