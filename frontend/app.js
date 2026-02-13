@@ -1717,3 +1717,256 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Render common phrases (hidden by default)
     renderCommonPhrases();
 });
+
+
+// ===== WEBCAM GESTURE RECOGNITION =====
+
+// Webcam variables
+let webcamStream = null;
+let isCapturing = false;
+let captureInterval = null;
+
+// Start webcam
+async function startWebcam() {
+    try {
+        const video = document.getElementById('webcam');
+        
+        // Request webcam access
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
+        });
+        
+        video.srcObject = webcamStream;
+        
+        // Update UI
+        document.getElementById('startWebcamBtn').style.display = 'none';
+        document.getElementById('stopWebcamBtn').style.display = 'inline-block';
+        document.getElementById('captureBtn').style.display = 'inline-block';
+        
+        // Start automatic gesture detection
+        startGestureDetection();
+        
+        console.log('Webcam started');
+    } catch (error) {
+        console.error('Error accessing webcam:', error);
+        alert('Could not access webcam. Please check permissions.');
+    }
+}
+
+// Stop webcam
+function stopWebcam() {
+    if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+    }
+    
+    stopGestureDetection();
+    
+    const video = document.getElementById('webcam');
+    video.srcObject = null;
+    
+    // Update UI
+    document.getElementById('startWebcamBtn').style.display = 'inline-block';
+    document.getElementById('stopWebcamBtn').style.display = 'none';
+    document.getElementById('captureBtn').style.display = 'none';
+    document.getElementById('detectedGesture').textContent = 'No gestures detected';
+    
+    console.log('Webcam stopped');
+}
+
+// Start automatic gesture detection
+function startGestureDetection() {
+    isCapturing = true;
+    
+    // Capture and process frames every 500ms
+    captureInterval = setInterval(() => {
+        if (isCapturing) {
+            processCurrentFrame();
+        }
+    }, 500);
+}
+
+// Stop gesture detection
+function stopGestureDetection() {
+    isCapturing = false;
+    if (captureInterval) {
+        clearInterval(captureInterval);
+        captureInterval = null;
+    }
+}
+
+// Process current webcam frame
+async function processCurrentFrame() {
+    try {
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        
+        // Set canvas size to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Draw current frame to canvas
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to base64
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Send to backend for processing
+        const response = await fetch(`${API_BASE_URL}/vision/process-frame`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                frame: frameData,
+                session_id: currentSessionId
+            })
+        });
+        
+        const result = await response.json();
+        
+        // Update UI with detected gestures
+        updateGestureDisplay(result);
+        
+    } catch (error) {
+        console.error('Error processing frame:', error);
+    }
+}
+
+// Update gesture display
+function updateGestureDisplay(result) {
+    const overlay = document.getElementById('detectedGesture');
+    
+    if (result.error) {
+        overlay.innerHTML = `<div style="color: #f56565;">⚠️ ${result.error}</div>`;
+        return;
+    }
+    
+    if (result.hands_detected > 0 && result.gestures.length > 0) {
+        const gestureText = result.gestures.map(g => 
+            `${g.gesture} (${(g.confidence * 100).toFixed(0)}%)`
+        ).join(', ');
+        
+        const emojiText = result.emojis.join(' ');
+        
+        overlay.innerHTML = `
+            <div>👋 Detected: ${gestureText}</div>
+            <div>📝 Emojis: ${emojiText}</div>
+        `;
+    } else {
+        overlay.textContent = 'No gestures detected';
+    }
+}
+
+// Capture gesture and send to AI
+async function captureGesture() {
+    try {
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Capture frame
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+        
+        // Show loading
+        addMessage('Processing gesture...', 'system');
+        
+        // Send to backend for full processing
+        const response = await fetch(`${API_BASE_URL}/vision/gesture-to-text`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+                frame: frameData,
+                session_id: currentSessionId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Display detected gesture
+            const gestureText = result.detected_gestures.map(g => g.gesture).join(', ');
+            const emojiText = result.emojis.join(' ');
+            
+            addMessage(`Gesture: ${gestureText} → ${emojiText}`, 'user');
+            addMessage(result.ai_response, 'assistant');
+        } else {
+            addMessage('No gesture detected. Please try again.', 'system');
+        }
+        
+    } catch (error) {
+        console.error('Error capturing gesture:', error);
+        addMessage('Error processing gesture', 'system');
+    }
+}
+
+// Toggle webcam section visibility
+function toggleWebcam() {
+    const section = document.getElementById('webcamSection');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+        stopWebcam();
+    }
+}
+
+// Add webcam mode button handler
+document.addEventListener('DOMContentLoaded', function() {
+    const webcamModeBtn = document.getElementById('webcam-mode-btn');
+    if (webcamModeBtn) {
+        webcamModeBtn.addEventListener('click', function() {
+            // Hide other input modes
+            document.getElementById('text-input-mode').style.display = 'none';
+            document.getElementById('speech-input-mode').style.display = 'none';
+            document.getElementById('webcamSection').style.display = 'block';
+            
+            // Update button states
+            document.getElementById('text-mode-btn').classList.remove('active');
+            document.getElementById('speech-mode-btn').classList.remove('active');
+            document.getElementById('webcam-mode-btn').classList.add('active');
+        });
+    }
+    
+    // Update text mode button to hide webcam
+    const textModeBtn = document.getElementById('text-mode-btn');
+    if (textModeBtn) {
+        textModeBtn.addEventListener('click', function() {
+            document.getElementById('text-input-mode').style.display = 'block';
+            document.getElementById('speech-input-mode').style.display = 'none';
+            document.getElementById('webcamSection').style.display = 'none';
+            stopWebcam();
+            
+            document.getElementById('text-mode-btn').classList.add('active');
+            document.getElementById('speech-mode-btn').classList.remove('active');
+            document.getElementById('webcam-mode-btn').classList.remove('active');
+        });
+    }
+    
+    // Update speech mode button to hide webcam
+    const speechModeBtn = document.getElementById('speech-mode-btn');
+    if (speechModeBtn) {
+        speechModeBtn.addEventListener('click', function() {
+            document.getElementById('text-input-mode').style.display = 'none';
+            document.getElementById('speech-input-mode').style.display = 'block';
+            document.getElementById('webcamSection').style.display = 'none';
+            stopWebcam();
+            
+            document.getElementById('text-mode-btn').classList.remove('active');
+            document.getElementById('speech-mode-btn').classList.add('active');
+            document.getElementById('webcam-mode-btn').classList.remove('active');
+        });
+    }
+});

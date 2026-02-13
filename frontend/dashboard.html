@@ -67,6 +67,9 @@
                                         <button type="button" id="speech-mode-btn" class="mode-btn">
                                             🎤 Speech
                                         </button>
+                                        <button type="button" id="webcam-mode-btn" class="mode-btn">
+                                            📹 Webcam
+                                        </button>
                                     </div>
                                 </div>
                                 
@@ -186,6 +189,26 @@
                                         <div id="recording-status" class="recording-status"></div>
                                     </div>
                                     <div id="speech-transcript" class="speech-transcript"></div>
+                                </div>
+                                
+                                <!-- Webcam Gesture Recognition Section -->
+                                <div class="webcam-section" id="webcamSection" style="display: none; margin-top: 20px;">
+                                    <h3>📹 Gesture Recognition</h3>
+                                    <div class="webcam-container">
+                                        <video id="webcam" autoplay playsinline></video>
+                                        <canvas id="canvas" style="display: none;"></canvas>
+                                        <div class="gesture-overlay" id="gestureOverlay">
+                                            <div class="detected-gesture" id="detectedGesture">No gestures detected</div>
+                                        </div>
+                                    </div>
+                                    <div class="webcam-controls">
+                                        <button type="button" onclick="startWebcam()" id="startWebcamBtn" class="btn-primary">Start Camera</button>
+                                        <button type="button" onclick="stopWebcam()" id="stopWebcamBtn" class="btn-danger" style="display: none;">Stop Camera</button>
+                                        <button type="button" onclick="captureGesture()" id="captureBtn" class="btn-secondary" style="display: none;">Capture Gesture</button>
+                                    </div>
+                                    <div class="gesture-info">
+                                        <p>Supported gestures: 👋 Wave, 👍 Thumbs Up, ✌️ Peace, 🙋 Raised Hand, ✋ Stop</p>
+                                    </div>
                                 </div>
                                 
                                 <button type="button" id="send-message" class="btn-secondary">Send Message</button>

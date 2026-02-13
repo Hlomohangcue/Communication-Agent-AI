@@ -12,6 +12,7 @@ from simulation.classroom_sim import ClassroomSimulation
 from database.db import Database
 from agents.gesture_agent import GestureAgent
 from auth.auth_handler import AuthHandler
+from services.vision_service import VisionService
 
 app = FastAPI(title="Communication Bridge AI")
 
@@ -29,6 +30,7 @@ coordinator = Coordinator(db)
 simulation = ClassroomSimulation(coordinator, db)
 gesture_agent = GestureAgent()
 auth_handler = AuthHandler()
+vision_service = VisionService()  # Initialize vision service
 
 # Authentication dependency
 async def get_current_user(authorization: Optional[str] = Header(None)):
@@ -87,6 +89,10 @@ class SaveMessageRequest(BaseModel):
     output_text: str
     intent: str = "manual_save"
     confidence: float = 1.0
+
+class ProcessFrameRequest(BaseModel):
+    frame: str  # Base64 encoded image
+    session_id: Optional[str] = None
 
 @app.get("/")
 async def root():
@@ -311,6 +317,62 @@ async def get_gesture_history(session_id: str, limit: int = 50):
     """Get gesture translation history for a session"""
     history = db.get_gesture_sequences(session_id, limit)
     return {"history": history}
+
+# Computer Vision Endpoints
+
+@app.post("/vision/process-frame")
+async def process_frame(request: ProcessFrameRequest):
+    """Process a webcam frame and detect gestures"""
+    result = vision_service.process_frame(request.frame)
+    
+    # If gestures detected and session provided, store them
+    if request.session_id and result.get("emojis"):
+        emoji_text = " ".join(result["emojis"])
+        # You can store this in database if needed
+    
+    return result
+
+@app.get("/vision/gestures")
+async def get_supported_gestures():
+    """Get list of supported gestures"""
+    return {
+        "gestures": vision_service.get_supported_gestures()
+    }
+
+@app.post("/vision/gesture-to-text")
+async def gesture_to_text(request: ProcessFrameRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Process frame, detect gesture, and generate AI response
+    Complete flow: Webcam → Gesture → Emoji → AI Response
+    """
+    # Process frame
+    vision_result = vision_service.process_frame(request.frame)
+    
+    if not vision_result.get("emojis"):
+        return {
+            "success": False,
+            "message": "No gestures detected",
+            "vision_result": vision_result
+        }
+    
+    # Convert emojis to text
+    emoji_input = " ".join(vision_result["emojis"])
+    
+    # Process through communication pipeline
+    comm_result = await coordinator.process_communication(
+        input_text=emoji_input,
+        user_type="nonverbal",
+        session_id=request.session_id
+    )
+    
+    return {
+        "success": True,
+        "vision_result": vision_result,
+        "communication_result": comm_result,
+        "detected_gestures": vision_result["gestures"],
+        "emojis": vision_result["emojis"],
+        "ai_response": comm_result.get("output", {}).get("text", "")
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
