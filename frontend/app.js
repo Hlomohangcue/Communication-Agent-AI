@@ -1816,11 +1816,9 @@ async function processCurrentFrame() {
         const frameData = canvas.toDataURL('image/jpeg', 0.8);
         
         // Send to backend for processing
-        const response = await fetch(`${API_BASE_URL}/vision/process-frame`, {
+        const response = await fetch(`${API_BASE}/vision/process-frame`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 frame: frameData,
                 session_id: currentSessionId
@@ -1837,7 +1835,7 @@ async function processCurrentFrame() {
     }
 }
 
-// Update gesture display
+// Update gesture display and populate input field
 function updateGestureDisplay(result) {
     const overlay = document.getElementById('detectedGesture');
     
@@ -1857,6 +1855,33 @@ function updateGestureDisplay(result) {
             <div>👋 Detected: ${gestureText}</div>
             <div>📝 Emojis: ${emojiText}</div>
         `;
+        
+        // AUTO-POPULATE INPUT FIELD (like speech-to-text)
+        // Get the appropriate input field based on current mode
+        const studentInput = document.getElementById('student-input');
+        const verbalInput = document.getElementById('verbal-teacher-input');
+        
+        if (currentMode === 'nonverbal-to-verbal' && studentInput) {
+            // Add emojis to student input (non-verbal user)
+            const currentText = studentInput.value.trim();
+            if (currentText) {
+                studentInput.value = currentText + ' ' + emojiText;
+            } else {
+                studentInput.value = emojiText;
+            }
+            
+            // Visual feedback
+            studentInput.style.backgroundColor = '#e6ffed';
+            setTimeout(() => {
+                studentInput.style.backgroundColor = '';
+            }, 300);
+            
+            console.log('✅ Gesture added to input:', emojiText);
+        } else if (currentMode === 'verbal-to-nonverbal' && verbalInput) {
+            // In verbal-to-nonverbal mode, gestures could be used as feedback
+            // For now, just show in overlay
+            console.log('Gesture detected in verbal-to-nonverbal mode:', emojiText);
+        }
     } else {
         overlay.textContent = 'No gestures detected';
     }
@@ -1878,15 +1903,12 @@ async function captureGesture() {
         const frameData = canvas.toDataURL('image/jpeg', 0.8);
         
         // Show loading
-        addMessage('Processing gesture...', 'system');
+        showNotification('Processing gesture...', 'info');
         
         // Send to backend for full processing
-        const response = await fetch(`${API_BASE_URL}/vision/gesture-to-text`, {
+        const response = await fetch(`${API_BASE}/vision/gesture-to-text`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 frame: frameData,
                 session_id: currentSessionId
@@ -1900,15 +1922,39 @@ async function captureGesture() {
             const gestureText = result.detected_gestures.map(g => g.gesture).join(', ');
             const emojiText = result.emojis.join(' ');
             
-            addMessage(`Gesture: ${gestureText} → ${emojiText}`, 'user');
-            addMessage(result.ai_response, 'assistant');
+            // Add to input field
+            const studentInput = document.getElementById('student-input');
+            if (studentInput) {
+                const currentText = studentInput.value.trim();
+                if (currentText) {
+                    studentInput.value = currentText + ' ' + emojiText;
+                } else {
+                    studentInput.value = emojiText;
+                }
+            }
+            
+            showNotification(`Gesture detected: ${gestureText} → ${emojiText}`, 'success');
         } else {
-            addMessage('No gesture detected. Please try again.', 'system');
+            showNotification('No gesture detected. Please try again.', 'warning');
         }
         
     } catch (error) {
         console.error('Error capturing gesture:', error);
-        addMessage('Error processing gesture', 'system');
+        showNotification('Error processing gesture', 'error');
+    }
+}
+
+// Clear gesture input
+function clearGestureInput() {
+    const studentInput = document.getElementById('student-input');
+    const verbalInput = document.getElementById('verbal-teacher-input');
+    
+    if (currentMode === 'nonverbal-to-verbal' && studentInput) {
+        studentInput.value = '';
+        showNotification('Input cleared', 'info');
+    } else if (currentMode === 'verbal-to-nonverbal' && verbalInput) {
+        verbalInput.value = '';
+        showNotification('Input cleared', 'info');
     }
 }
 
