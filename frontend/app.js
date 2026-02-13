@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://34.6.169.63:8000';
 
 let currentSessionId = null;
 let isProcessing = false;
