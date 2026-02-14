@@ -872,7 +872,12 @@ function stopRecording() {
             
             const transcript = document.getElementById('speech-transcript').textContent;
             if (transcript.trim()) {
-                showNotification('Recording stopped. Click "Send Message" to send.', 'info');
+                // Put the speech text into the input field
+                const studentInput = document.getElementById('student-input');
+                if (studentInput) {
+                    studentInput.value = transcript.trim();
+                }
+                showNotification('Speech recorded! Click "Send Message" to send.', 'info');
             } else {
                 showNotification('Recording stopped. No speech detected.', 'warning');
             }
@@ -1141,12 +1146,39 @@ async function sendMessage() {
             
         } else {
             // Non-Verbal to Verbal Mode: Original behavior
-            // Add student message to conversation
-            addConversationMessage('student', input);
+            // First, translate text to gestures
+            let gestureEmojis = '';
+            try {
+                const gestureResponse = await fetch(`${API_BASE}/translate/text-to-gesture`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        text: input,
+                        session_id: currentSessionId
+                    })
+                });
+                
+                if (gestureResponse.ok) {
+                    const gestureData = await gestureResponse.json();
+                    if (gestureData.success && gestureData.gesture_sequence) {
+                        gestureEmojis = gestureData.gesture_sequence;
+                        console.log('Text translated to gestures:', gestureEmojis);
+                    }
+                }
+            } catch (gestureError) {
+                console.error('Error translating to gestures:', gestureError);
+                // Continue without gestures if translation fails
+            }
+            
+            // Add student message to conversation WITH gesture emojis
+            const displayMessage = gestureEmojis ? `${input} ${gestureEmojis}` : input;
+            addConversationMessage('student', displayMessage);
             
             // Show student input in workflow
             addWorkflowItem('Student', `Sent: "${input.substring(0, 30)}${input.length > 30 ? '...' : ''}"`);
-            
+            if (gestureEmojis) {
+                addWorkflowItem('AI System', `Translated to gestures: ${gestureEmojis}`);
+            }            
             const requestBody = {
                 session_id: currentSessionId,
                 input_text: input
