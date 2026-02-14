@@ -1952,8 +1952,8 @@ async function captureGesture() {
         // Show loading
         showNotification('Processing gesture...', 'info');
         
-        // Send to backend for full processing
-        const response = await fetch(`${API_BASE}/vision/gesture-to-text`, {
+        // Send to backend for interpretation and auto-response
+        const response = await fetch(`${API_BASE}/vision/interpret-gesture`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
@@ -1962,32 +1962,39 @@ async function captureGesture() {
             })
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const result = await response.json();
         
-        if (result.success) {
+        if (result.success && result.interpretation) {
             // Display detected gesture
             const gestureText = result.detected_gestures.map(g => g.gesture).join(', ');
             const emojiText = result.emojis.join(' ');
+            const interpretation = result.interpretation;
             
-            // Add to input field
-            const studentInput = document.getElementById('student-input');
-            if (studentInput) {
-                const currentText = studentInput.value.trim();
-                if (currentText) {
-                    studentInput.value = currentText + ' ' + emojiText;
-                } else {
-                    studentInput.value = emojiText;
-                }
+            // Add gesture to conversation
+            addConversationMessage('student', `[Gesture: ${gestureText}] ${emojiText}`);
+            
+            // Add AI response to conversation
+            if (interpretation.understood) {
+                addConversationMessage('teacher', interpretation.response, {
+                    intent: 'gesture_interpretation',
+                    method: 'auto-response'
+                });
+                
+                showNotification(`Gesture: ${gestureText} → ${interpretation.message}`, 'success');
+            } else {
+                showNotification(interpretation.message, 'warning');
             }
-            
-            showNotification(`Gesture detected: ${gestureText} → ${emojiText}`, 'success');
         } else {
-            showNotification('No gesture detected. Please try again.', 'warning');
+            showNotification(result.message || 'No gesture detected. Please try again.', 'warning');
         }
         
     } catch (error) {
         console.error('Error capturing gesture:', error);
-        showNotification('Error processing gesture', 'error');
+        showNotification(`Failed to process gesture: ${error.message}`, 'error');
     }
 }
 
