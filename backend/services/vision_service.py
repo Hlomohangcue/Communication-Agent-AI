@@ -14,30 +14,36 @@ class VisionService:
         try:
             import mediapipe as mp
             
-            # MediaPipe v0.10.30+ uses different API
-            # Import the tasks module
-            from mediapipe.tasks import python
-            from mediapipe.tasks.python import vision
+            # Try to use MediaPipe v0.10.8 (old API)
+            self.mp_hands = mp.solutions.hands
+            self.mp_drawing = mp.solutions.drawing_utils
             
-            # For now, disable MediaPipe and use fallback
-            # The new API requires different initialization
-            self.mediapipe_available = False
-            self.hands = None
+            # Initialize hands detector
+            self.hands = self.mp_hands.Hands(
+                static_image_mode=False,
+                max_num_hands=2,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
             
-            print("⚠ MediaPipe v0.10.30+ detected - New API not yet integrated")
-            print("  Vision features temporarily disabled")
-            print("  System will work with manual emoji input")
-            print("  GPU deployment will use compatible version")
+            self.mediapipe_available = True
+            print("✅ MediaPipe initialized successfully")
+            print(f"   Version: {mp.__version__}")
+            print("   Hand gesture detection enabled")
                 
         except ImportError:
             self.mediapipe_available = False
             self.hands = None
+            self.mp_hands = None
+            self.mp_drawing = None
             print("⚠ MediaPipe not installed - vision features disabled")
-            print("  Install with: pip install mediapipe opencv-python")
+            print("  Install with: pip install mediapipe==0.10.8 opencv-python")
         except Exception as e:
             self.mediapipe_available = False
             self.hands = None
-            print(f"⚠ MediaPipe initialization: {e}")
+            self.mp_hands = None
+            self.mp_drawing = None
+            print(f"⚠ MediaPipe initialization error: {e}")
             print("  Vision features disabled - system will use manual input")
         
         # Gesture mappings
