@@ -60,6 +60,46 @@ class GestureMeaningService:
                 "primary": "halt",
                 "meanings": ["stop", "halt", "wait", "pause"],
                 "context": "stop or pause action"
+            },
+            "i_love_you": {
+                "primary": "love",
+                "meanings": ["I love you", "love", "care", "affection", "ILY"],
+                "context": "expressing love or affection (ASL sign)"
+            },
+            "call_me": {
+                "primary": "contact",
+                "meanings": ["call me", "phone", "contact", "hang loose", "shaka"],
+                "context": "requesting contact or casual greeting"
+            },
+            "rock_on": {
+                "primary": "excitement",
+                "meanings": ["rock on", "awesome", "cool", "metal", "horns"],
+                "context": "expressing excitement or approval"
+            },
+            "three": {
+                "primary": "number",
+                "meanings": ["three", "third", "W", "Vulcan salute", "live long and prosper"],
+                "context": "number three or Vulcan greeting"
+            },
+            "pinch": {
+                "primary": "small",
+                "meanings": ["small", "little bit", "tiny", "pinch", "close"],
+                "context": "indicating something small or a small amount"
+            },
+            "pray": {
+                "primary": "gratitude",
+                "meanings": ["thank you", "please", "pray", "grateful", "namaste"],
+                "context": "expressing gratitude, request, or respect"
+            },
+            "clap": {
+                "primary": "applause",
+                "meanings": ["clap", "applause", "congratulations", "well done", "bravo"],
+                "context": "showing appreciation or celebration"
+            },
+            "crossed_fingers": {
+                "primary": "hope",
+                "meanings": ["good luck", "hope", "wish", "fingers crossed", "hoping"],
+                "context": "wishing good luck or hoping for something"
             }
         }
         
@@ -124,6 +164,54 @@ class GestureMeaningService:
                 "I understand. Is there anything else?",
                 "Got it. What would you like to communicate?",
                 "Understood. How can I help?"
+            ],
+            "love": [
+                "I love you too! That's so sweet!",
+                "Aww, thank you! I care about you too!",
+                "That's wonderful! Sending love back to you!",
+                "I appreciate you! How can I help you today?"
+            ],
+            "contact": [
+                "Sure, I'll make a note that you want to be contacted.",
+                "Got it! You'd like someone to call you.",
+                "Understood. I'll pass along that message.",
+                "Okay! Hang loose! What else do you need?"
+            ],
+            "excitement": [
+                "Rock on! That's awesome!",
+                "Yeah! That's so cool!",
+                "Excellent! You're excited!",
+                "That's great energy! What's up?"
+            ],
+            "gratitude": [
+                "You're very welcome!",
+                "My pleasure! Happy to help!",
+                "Thank you too! Is there anything else?",
+                "You're welcome! What else can I do for you?"
+            ],
+            "applause": [
+                "Thank you! I appreciate the applause!",
+                "Wonderful! Great job to you too!",
+                "Congratulations! Well done!",
+                "Bravo! That's fantastic!"
+            ],
+            "hope": [
+                "Fingers crossed for you! Good luck!",
+                "I'm hoping for the best for you too!",
+                "Wishing you all the luck!",
+                "I hope everything works out great!"
+            ],
+            "small": [
+                "Just a little bit? Got it!",
+                "A small amount, understood.",
+                "Okay, something tiny. What is it?",
+                "Just a pinch? I understand."
+            ],
+            "number": [
+                "Three, got it!",
+                "Number three, understood.",
+                "Third item? What would you like?",
+                "Live long and prosper! How can I help?"
             ]
         }
     
@@ -172,7 +260,7 @@ class GestureMeaningService:
         
         # Map gestures to response categories
         gesture_to_category = {
-            "wave": "greeting",  # Could be greeting or farewell based on context
+            "wave": "greeting",
             "thumbs_up": "agreement",
             "thumbs_down": "disagreement",
             "ok": "confirmation",
@@ -181,7 +269,15 @@ class GestureMeaningService:
             "stop": "stop",
             "open_palm": "stop",
             "fist": "power",
-            "peace": "peace"
+            "peace": "peace",
+            "i_love_you": "love",
+            "call_me": "contact",
+            "rock_on": "excitement",
+            "pray": "gratitude",
+            "clap": "applause",
+            "crossed_fingers": "hope",
+            "pinch": "small",
+            "three": "number"
         }
         
         return gesture_to_category.get(gesture_name, "power")

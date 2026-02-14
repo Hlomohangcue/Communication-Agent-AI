@@ -57,7 +57,15 @@ class VisionService:
             "fist": "✊",
             "open_palm": "🖐️",
             "raised_hand": "🙋",
-            "stop": "✋"
+            "stop": "✋",
+            "i_love_you": "🤟",  # ILY sign - pinky, index, and thumb extended
+            "call_me": "🤙",  # Shaka/call me sign - thumb and pinky extended
+            "rock_on": "🤘",  # Rock on sign - index and pinky extended
+            "crossed_fingers": "🤞",  # Crossed fingers - index and middle crossed
+            "pinch": "🤏",  # Pinching gesture - thumb and index close
+            "three": "🖖",  # Vulcan salute or number three
+            "pray": "🙏",  # Praying hands - palms together
+            "clap": "👏"  # Clapping - two open palms
         }
     
     def process_frame(self, frame_data: str) -> Dict[str, Any]:
@@ -223,6 +231,32 @@ class VisionService:
         # Fist: all fingers down
         if not any(fingers_up.values()):
             return "fist"
+        
+        # I Love You sign: thumb, index, and pinky up (middle and ring down)
+        if fingers_up["thumb"] and fingers_up["index"] and fingers_up["pinky"]:
+            if not fingers_up["middle"] and not fingers_up["ring"]:
+                return "i_love_you"
+        
+        # Call me / Shaka: thumb and pinky up (others down)
+        if fingers_up["thumb"] and fingers_up["pinky"]:
+            if not any([fingers_up["index"], fingers_up["middle"], fingers_up["ring"]]):
+                return "call_me"
+        
+        # Rock on: index and pinky up (thumb, middle, ring down)
+        if fingers_up["index"] and fingers_up["pinky"]:
+            if not fingers_up["thumb"] and not fingers_up["middle"] and not fingers_up["ring"]:
+                return "rock_on"
+        
+        # Three fingers / Vulcan salute: index, middle, ring up
+        if fingers_up["index"] and fingers_up["middle"] and fingers_up["ring"]:
+            if not fingers_up["pinky"]:
+                return "three"
+        
+        # Pinch: thumb and index close together, others down
+        thumb_index_dist = self._distance(thumb_tip, index_tip)
+        if thumb_index_dist < 0.03:  # Very close together
+            if not any([fingers_up["middle"], fingers_up["ring"], fingers_up["pinky"]]):
+                return "pinch"
         
         # Open palm / Stop: all fingers up
         if all([
