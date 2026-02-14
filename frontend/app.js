@@ -1877,6 +1877,9 @@ function updateGestureDisplay(result) {
             }, 300);
             
             console.log('✅ Gesture added to input:', emojiText);
+            
+            // NEW: Auto-interpret gesture and show meaning
+            interpretGestureAndRespond(result);
         } else if (currentMode === 'verbal-to-nonverbal' && verbalInput) {
             // In verbal-to-nonverbal mode, gestures could be used as feedback
             // For now, just show in overlay
@@ -1884,6 +1887,50 @@ function updateGestureDisplay(result) {
         }
     } else {
         overlay.textContent = 'No gestures detected';
+    }
+}
+
+// NEW: Interpret gesture and show meaningful response
+async function interpretGestureAndRespond(visionResult) {
+    try {
+        // Call the new interpret endpoint
+        const response = await fetch(`${API_BASE}/vision/interpret-gesture`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                frame: "", // Already processed
+                session_id: currentSessionId,
+                // Pass the vision result for interpretation
+                gestures: visionResult.gestures
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.interpretation) {
+            const interp = result.interpretation;
+            
+            // Show interpretation in a notification
+            showNotification(
+                `Gesture Meaning: ${interp.message}\n\nResponse: ${interp.response}`,
+                'info'
+            );
+            
+            // Add to conversation display
+            if (interp.understood) {
+                const gestureNames = result.detected_gestures.map(g => g.gesture).join(', ');
+                addConversationMessage('student', `[Gesture: ${gestureNames}] ${result.emojis.join(' ')}`);
+                addConversationMessage('teacher', interp.response, {
+                    intent: 'gesture_interpretation',
+                    method: 'auto-response'
+                });
+            }
+            
+            console.log('✅ Gesture interpreted:', interp);
+        }
+    } catch (error) {
+        console.error('Error interpreting gesture:', error);
+        // Don't show error to user - gesture was still added to input
     }
 }
 

@@ -13,6 +13,7 @@ from database.db import Database
 from agents.gesture_agent import GestureAgent
 from auth.auth_handler import AuthHandler
 from services.vision_service import VisionService
+from services.gesture_meanings import GestureMeaningService
 
 app = FastAPI(title="Communication Bridge AI")
 
@@ -31,6 +32,7 @@ simulation = ClassroomSimulation(coordinator, db)
 gesture_agent = GestureAgent()
 auth_handler = AuthHandler()
 vision_service = VisionService()  # Initialize vision service
+gesture_meaning_service = GestureMeaningService()  # Initialize gesture meaning service
 
 # Authentication dependency
 async def get_current_user(authorization: Optional[str] = Header(None)):
@@ -372,6 +374,54 @@ async def gesture_to_text(request: ProcessFrameRequest, current_user: dict = Dep
         "detected_gestures": vision_result["gestures"],
         "emojis": vision_result["emojis"],
         "ai_response": comm_result.get("output", {}).get("text", "")
+    }
+
+@app.post("/vision/interpret-gesture")
+async def interpret_gesture(request: ProcessFrameRequest, current_user: dict = Depends(get_current_user)):
+    """
+    NEW: Process frame, detect gesture, interpret meaning, and generate contextual response
+    Enhanced flow: Webcam → Gesture → Meaning → Contextual Response
+    """
+    # Process frame to detect gestures
+    vision_result = vision_service.process_frame(request.frame)
+    
+    if not vision_result.get("gestures"):
+        return {
+            "success": False,
+            "message": "No gestures detected. Please try again.",
+            "vision_result": vision_result,
+            "interpretation": {
+                "understood": False,
+                "response": "I didn't detect any hand gestures. Please make sure your hand is visible and try again."
+            }
+        }
+    
+    # Extract gesture names
+    gesture_names = [g["gesture"] for g in vision_result["gestures"]]
+    
+    # Interpret gestures and generate meaningful response
+    interpretation = gesture_meaning_service.generate_response(gesture_names, context="general")
+    
+    # Store in database if session provided
+    if request.session_id:
+        emoji_text = " ".join(vision_result["emojis"])
+        db.store_message(
+            session_id=request.session_id,
+            input_text=f"[Gesture] {', '.join(gesture_names)}",
+            output_text=interpretation["response"],
+            intent="gesture_interpretation",
+            confidence=vision_result.get("confidence", 0.0)
+        )
+    
+    return {
+        "success": True,
+        "vision_result": vision_result,
+        "detected_gestures": vision_result["gestures"],
+        "emojis": vision_result["emojis"],
+        "interpretation": interpretation,
+        "message": interpretation["message"],
+        "response": interpretation["response"],
+        "meanings": interpretation.get("meanings", [])
     }
 
 if __name__ == "__main__":
