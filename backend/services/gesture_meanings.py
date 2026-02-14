@@ -2,6 +2,8 @@
 Gesture Meaning Service
 Maps detected hand gestures to their semantic meanings and generates appropriate responses
 """
+from typing import Dict, Any, List
+import random
 
 class GestureMeaningService:
     """Service to interpret gesture meanings and generate contextual responses"""
