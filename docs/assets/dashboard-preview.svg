@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Dashboard preview">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect x="40" y="30" width="1200" height="70" rx="14" fill="#111827" stroke="#334155"/>
+  <text x="70" y="72" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">Communication Bridge AI Dashboard</text>
+  <rect x="40" y="120" width="760" height="560" rx="16" fill="#0b1220" stroke="#334155"/>
+  <text x="70" y="165" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600">Non-Verbal to Verbal</text>
+  <rect x="70" y="190" width="210" height="36" rx="10" fill="#2563eb"/>
+  <text x="95" y="215" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Start Simulation</text>
+  <rect x="70" y="245" width="700" height="110" rx="12" fill="#0f172a" stroke="#334155"/>
+  <text x="90" y="275" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="14">Input</text>
+  <text x="90" y="314" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="22">👋 🙋 ❓  I need help with this lesson</text>
+  <rect x="70" y="370" width="700" height="120" rx="12" fill="#0f172a" stroke="#334155"/>
+  <text x="90" y="400" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="14">AI Output</text>
+  <text x="90" y="440" fill="#22d3ee" font-family="Segoe UI, Arial, sans-serif" font-size="20">"I see you need support. Let's work through this together."</text>
+  <rect x="820" y="120" width="420" height="560" rx="16" fill="#0b1220" stroke="#334155"/>
+  <text x="850" y="165" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="600">Workflow & History</text>
+  <rect x="850" y="190" width="360" height="70" rx="10" fill="#111827"/>
+  <text x="870" y="220" fill="#93c5fd" font-family="Segoe UI, Arial, sans-serif" font-size="14">intent_agent -> ask_question (0.88)</text>
+  <text x="870" y="243" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="12">12:31:21</text>
+  <rect x="850" y="275" width="360" height="70" rx="10" fill="#111827"/>
+  <text x="870" y="305" fill="#34d399" font-family="Segoe UI, Arial, sans-serif" font-size="14">speech_agent -> response_generated</text>
+  <text x="870" y="328" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="12">12:31:22</text>
+  <rect x="850" y="360" width="360" height="290" rx="10" fill="#111827"/>
+  <text x="870" y="395" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="14">Conversation History</text>
+  <text x="870" y="430" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="13">Student: 👋 🙋 ❓</text>
+  <text x="870" y="455" fill="#67e8f9" font-family="Segoe UI, Arial, sans-serif" font-size="13">Teacher: How can I help you?</text>
+  <text x="870" y="480" fill="#f8fafc" font-family="Segoe UI, Arial, sans-serif" font-size="13">Student: 🍎 💧</text>
+  <text x="870" y="505" fill="#67e8f9" font-family="Segoe UI, Arial, sans-serif" font-size="13">Teacher: Let's get food and water.</text>
+</svg>
