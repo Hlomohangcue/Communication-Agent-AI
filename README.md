@@ -1,216 +1,113 @@
 # Communication Bridge AI
 
-Production-ready autonomous agent system for bridging communication between verbal and non-verbal users using AI-powered gesture recognition and translation.
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-active-success.svg)](#)
 
-## 🌟 Features
+AI-powered communication bridge for verbal and non-verbal interaction.
 
-- **Bidirectional Communication**: Non-Verbal ↔ Verbal translation
-- **70+ Emoji Gestures**: ASL-based gesture system
-- **AI-Powered Responses**: Google Gemini integration
-- **User Authentication**: JWT-based auth with freemium credits
-- **Real-time Translation**: Instant phrase-to-gesture conversion
-- **Persistent Sessions**: Conversation history across modes
-- **Production Ready**: Deployed on Vultr VM with Nginx
+## Project Overview
+Communication Bridge AI helps users communicate through text, speech, and gestures. It combines a multi-agent backend, a gesture interpretation pipeline, and a simple web frontend for real-time interaction.
 
-## System Architecture
+## Core Features
+- Bidirectional communication flows.
+- Gesture detection and interpretation.
+- Text-to-gesture translation.
+- Context-aware AI responses with fallback logic.
+- Authentication and credit-based usage controls.
+- Session history and operational logs.
 
-### Multi-Agent System
-- **Intent Detection Agent**: Determines user intent from input
-- **Non-Verbal Interpretation Agent**: Converts gesture tokens/symbols to semantic meaning
-- **Speech/Text Generation Agent**: Produces output for verbal users
-- **Context & Learning Agent**: Stores session context and adapts responses
-- **Coordinator Agent**: Central decision-maker routing tasks between agents
+## Architecture
+High-level flow:
+1. Input arrives from web UI (text, speech transcript, or webcam frame).
+2. FastAPI routes request to coordinator and domain agents.
+3. Agents interpret intent, generate response, and persist interaction.
+4. Frontend renders workflow and conversation state.
 
-### Tech Stack
-- **Backend**: Python FastAPI + Uvicorn
-- **Frontend**: HTML, CSS, JavaScript (Vanilla)
-- **AI**: Google Gemini API (gemini-1.5-flash-latest)
-- **Database**: SQLite (production-ready)
-- **Authentication**: JWT + bcrypt
-- **Deployment**: Vultr VM + Nginx + Systemd
+See detailed architecture docs in docs/ARCHITECTURE.md.
 
-## 🚀 Quick Start
+## Installation
+### Prerequisites
+- Python 3.11+
+- pip
+- Optional: Gemini API key for AI generation
 
-### Local Development
-
-1. **Install Dependencies**
+### Setup
 ```bash
+git clone https://github.com/Hlomohangcue/Communication-Agent-AI.git
+cd Communication-Agent-AI
 pip install -r requirements.txt
-```
-
-2. **Configure API Key**
-```bash
-# Copy example env file
 cp .env.example .env
-
-# Edit .env and add your Gemini API key
-nano .env
 ```
 
-3. **Run Backend**
+## Configuration
+Edit .env and set at minimum:
+- GEMINI_API_KEY
+- JWT_SECRET_KEY
+- CORS_ORIGINS
+
+See docs/DEVELOPMENT.md and docs/SECURITY.md for full configuration guidance.
+
+## Running Locally
+### Backend
 ```bash
 cd backend
 python main.py
 ```
 
-Backend runs on: `http://localhost:8000`
-
-4. **Open Frontend**
-Open `frontend/login.html` in your browser or serve with:
+### Frontend
+Open frontend/login.html directly or serve static files:
 ```bash
 python -m http.server 8080 --directory frontend
 ```
 
-### Production Deployment (Vultr VM)
+## Example Usage
+- Login at frontend/login.html.
+- Start simulation from dashboard.
+- Send emoji/text input or use webcam mode.
+- Inspect agent workflow and conversation history.
 
-#### Quick Deploy (Automated)
+## API
+Core endpoints include:
+- POST /auth/signup
+- POST /auth/login
+- POST /simulate/start
+- POST /simulate/step
+- POST /translate/text-to-gesture
+- POST /vision/interpret-gesture
+
+Detailed endpoint reference: docs/API.md.
+
+## Screenshots
+Add screenshots to docs/assets and link here:
+- docs/assets/dashboard.png
+- docs/assets/gesture-mode.png
+- docs/assets/conversation-history.png
+
+## Testing
 ```bash
-# On your Vultr VM:
-wget https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/deploy_vultr.sh
-chmod +x deploy_vultr.sh
-./deploy_vultr.sh
+pip install -r requirements-dev.txt
+pytest -q
 ```
 
-#### Manual Deploy
-See **[VULTR_DEPLOYMENT_COMPLETE.md](VULTR_DEPLOYMENT_COMPLETE.md)** for detailed step-by-step instructions.
+See docs/TESTING.md.
 
-#### Quick Reference
-See **[DEPLOYMENT_QUICK_REFERENCE.md](DEPLOYMENT_QUICK_REFERENCE.md)** for common commands.
+## Deployment
+- Dockerfile included.
+- Nginx reverse proxy template included.
+- Vultr deployment script included.
 
-### Docker Deployment
+See docs/DEPLOYMENT.md.
 
-1. **Build Image**
-```bash
-docker build -t communication-bridge-ai .
-```
+## Roadmap
+- Complete frontend modularization.
+- Add async database layer for scale.
+- Expand CI security scanning and release automation.
+- Improve LLM guardrails and response policy checks.
 
-2. **Run Container**
-```bash
-docker run -d -p 8000:8000 -e GEMINI_API_KEY="your-key" communication-bridge-ai
-```
-
-## Vultr Deployment
-
-### Setup VM
-
-1. Create Ubuntu 22.04 VM on Vultr
-2. SSH into server
-3. Install Docker:
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-```
-
-### Deploy Application
-
-```bash
-# Clone repository
-git clone <your-repo-url>
-cd communication-bridge-ai
-
-# Build and run
-docker build -t comm-bridge .
-docker run -d -p 80:8000 -e GEMINI_API_KEY="your-key" --name comm-bridge comm-bridge
-```
-
-### Configure Firewall
-```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
-```
-
-## API Endpoints
-
-- `POST /simulate/start` - Start classroom simulation
-- `POST /simulate/step` - Process simulation step
-- `POST /communicate` - Direct communication endpoint
-- `GET /logs` - Retrieve agent logs
-- `GET /session/{id}` - Get session details
-- `GET /sessions` - List recent sessions
-
-## Features
-
-### Autonomous Operation
-- Automatic agent selection and routing
-- Confidence-based retry logic
-- Decision logging and context tracking
-- No manual intervention during simulation
-
-### Classroom Simulation
-- Non-verbal student input (text, symbols, gestures)
-- AI processing with multi-agent coordination
-- Verbal teacher output
-- Real-time workflow visualization
-
-### Token System
-Predefined gesture tokens:
-- 👋 Greeting
-- 🙋 Need attention/help
-- ❓ Question
-- ✋ Stop/wait
-- 👍 Yes/agree
-- 👎 No/disagree
-- 🚽 Bathroom need
-- 🍎 Hungry/food
-- 💧 Thirsty/water
-
-## Project Structure
-
-```
-communication-bridge-ai/
-├── backend/
-│   ├── main.py                 # FastAPI application
-│   ├── coordinator/
-│   │   └── orchestrator.py     # Central coordinator
-│   ├── agents/
-│   │   ├── intent_agent.py
-│   │   ├── nonverbal_agent.py
-│   │   ├── speech_agent.py
-│   │   └── context_agent.py
-│   ├── simulation/
-│   │   └── classroom_sim.py
-│   └── database/
-│       ├── db.py
-│       └── models.py
-├── frontend/
-│   ├── index.html
-│   ├── dashboard.html
-│   ├── app.js
-│   └── styles.css
-├── requirements.txt
-├── Dockerfile
-└── README.md
-```
-
-## Usage
-
-1. Open dashboard at `http://your-server-ip/dashboard.html`
-2. Click "Start Simulation"
-3. Enter non-verbal input (text or tokens)
-4. Click "Send Message"
-5. View AI processing workflow
-6. See teacher output
-7. Monitor agent decision logs
-
-## Configuration
-
-### Environment Variables
-- `GEMINI_API_KEY`: Google Gemini API key (required for AI features)
-
-### Database
-SQLite database created automatically at `communication_bridge.db`
-
-## Production Considerations
-
-- Set up HTTPS with Let's Encrypt
-- Configure proper logging
-- Implement rate limiting
-- Add authentication if needed
-- Monitor resource usage
-- Set up backup for database
-- Use PostgreSQL for production scale
+## Contributing
+Contributions are welcome. Read CONTRIBUTING.md and CODE_OF_CONDUCT.md before opening issues or pull requests.
 
 ## License
-
-MIT
+MIT License. See LICENSE.
