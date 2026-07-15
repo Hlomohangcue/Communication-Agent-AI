@@ -2,11 +2,22 @@ import jwt
 import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional, Dict
-import os
+import logging
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+try:
+    from core.settings import settings
+except ImportError:
+    from backend.core.settings import settings
+
+
+logger = logging.getLogger(__name__)
+
+SECRET_KEY = settings.jwt_secret_key or "development-only-jwt-secret"
+ALGORITHM = settings.jwt_algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_expire_minutes
+
+if not settings.jwt_secret_key:
+    logger.warning("JWT_SECRET_KEY is not set; using development-only fallback secret")
 
 class AuthHandler:
     @staticmethod
@@ -41,5 +52,5 @@ class AuthHandler:
             return payload
         except jwt.ExpiredSignatureError:
             return None
-        except jwt.JWTError:
+        except jwt.InvalidTokenError:
             return None

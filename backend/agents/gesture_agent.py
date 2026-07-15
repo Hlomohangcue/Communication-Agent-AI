@@ -3,14 +3,21 @@ Gesture Translation Agent
 Translates text/speech to gesture sequences for non-verbal users
 """
 
-import google.generativeai as genai
-from config import GEMINI_API_KEY
+import logging
+
+try:
+    from services.llm_client import GeminiClient
+except ImportError:
+    from backend.services.llm_client import GeminiClient
+
+
+logger = logging.getLogger(__name__)
 
 class GestureAgent:
     def __init__(self):
         """Initialize the Gesture Translation Agent"""
-        genai.configure(api_key=GEMINI_API_KEY)
-        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        self.client = GeminiClient()
+        self.model = self.client.model
         
         # Gesture library with ASL meanings
         self.gesture_library = {
@@ -187,10 +194,12 @@ class GestureAgent:
         
         # Use AI for complex sentences
         try:
+            if not self.model:
+                raise RuntimeError("Gemini model unavailable")
             ai_result = self._ai_translate(text)
             return ai_result
         except Exception as e:
-            print(f"AI translation error: {e}")
+            logger.exception("Gesture AI translation error: %s", e)
             # Fallback to basic representation
             return {
                 "gesture_sequence": "💬 ❓",
@@ -233,13 +242,21 @@ Now translate: "{text}"
             
             # Clean up the response
             gesture_sequence = gesture_sequence.replace('\n', ' ').strip()
+            allowed = set(self.gesture_library.values())
+            validated_gestures = [token for token in gesture_sequence.split() if token in allowed]
+
+            if not validated_gestures:
+                validated_gestures = ["💬", "❓"]
+                method = "ai_translation_fallback_filtered"
+            else:
+                method = "ai_translation"
             
             return {
-                "gesture_sequence": gesture_sequence,
+                "gesture_sequence": " ".join(validated_gestures),
                 "original_text": text,
-                "method": "ai_translation",
-                "gestures": gesture_sequence.split(),
-                "explanation": "AI-generated gesture sequence"
+                "method": method,
+                "gestures": validated_gestures,
+                "explanation": "AI-generated gesture sequence with allowlist validation"
             }
         except Exception as e:
             raise Exception(f"AI translation failed: {str(e)}")

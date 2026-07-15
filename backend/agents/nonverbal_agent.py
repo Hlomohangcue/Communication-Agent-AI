@@ -1,28 +1,18 @@
-import os
 from typing import Dict, Any
-import google.generativeai as genai
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from config import GEMINI_API_KEY
+import logging
+
+try:
+    from services.llm_client import GeminiClient
+except ImportError:
+    from backend.services.llm_client import GeminiClient
+
+
+logger = logging.getLogger(__name__)
 
 class NonVerbalAgent:
     def __init__(self):
-        api_key = GEMINI_API_KEY
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-                try:
-                    self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
-                except:
-                    try:
-                        self.model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-                    except:
-                        self.model = genai.GenerativeModel('models/gemini-pro')
-            except Exception as e:
-                print(f"Error initializing Gemini in NonVerbalAgent: {e}")
-                self.model = None
-        else:
-            self.model = None
+        self.client = GeminiClient()
+        self.model = self.client.model
         
         # Symbol/gesture token mappings
         self.token_map = {
@@ -87,6 +77,7 @@ Be concise and clear."""
                     "interpretation_method": "ai_enhanced"
                 }
             except Exception as e:
+                logger.exception("NonVerbalAgent Gemini call failed: %s", e)
                 return self._fallback_interpretation(input_text, tokens_found)
         else:
             return self._fallback_interpretation(input_text, tokens_found)

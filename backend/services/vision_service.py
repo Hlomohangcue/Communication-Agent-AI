@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 from typing import Dict, Any, Optional, List
 import base64
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 class VisionService:
     """
@@ -27,24 +31,20 @@ class VisionService:
             )
             
             self.mediapipe_available = True
-            print("✅ MediaPipe initialized successfully")
-            print(f"   Version: {mp.__version__}")
-            print("   Hand gesture detection enabled")
+            logger.info("MediaPipe initialized successfully (version=%s)", mp.__version__)
                 
         except ImportError:
             self.mediapipe_available = False
             self.hands = None
             self.mp_hands = None
             self.mp_drawing = None
-            print("⚠ MediaPipe not installed - vision features disabled")
-            print("  Install with: pip install mediapipe==0.10.8 opencv-python")
+            logger.warning("MediaPipe not installed; vision features are disabled")
         except Exception as e:
             self.mediapipe_available = False
             self.hands = None
             self.mp_hands = None
             self.mp_drawing = None
-            print(f"⚠ MediaPipe initialization error: {e}")
-            print("  Vision features disabled - system will use manual input")
+            logger.exception("MediaPipe initialization error: %s", e)
         
         # Gesture mappings
         self.gesture_to_emoji = {
@@ -139,7 +139,7 @@ class VisionService:
             }
             
         except Exception as e:
-            print(f"Error processing frame: {e}")
+            logger.exception("Error processing frame: %s", e)
             return {
                 "error": str(e),
                 "hands_detected": 0,

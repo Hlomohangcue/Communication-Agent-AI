@@ -7,6 +7,11 @@ from agents.nonverbal_agent import NonVerbalAgent
 from agents.speech_agent import SpeechAgent
 from agents.context_agent import ContextAgent
 
+try:
+    from core.settings import settings
+except ImportError:
+    from backend.core.settings import settings
+
 class Coordinator:
     def __init__(self, db):
         self.db = db
@@ -14,7 +19,7 @@ class Coordinator:
         self.nonverbal_agent = NonVerbalAgent()
         self.speech_agent = SpeechAgent()
         self.context_agent = ContextAgent(db)
-        self.confidence_threshold = 0.7
+        self.confidence_threshold = settings.default_confidence_threshold
     
     async def process_communication(
         self, 

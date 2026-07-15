@@ -1,4 +1,4 @@
-const API_BASE = 'https://8000-i1jp0gsn9.brevlab.com';
+const API_BASE = window.API_BASE || localStorage.getItem('apiBaseUrl') || 'https://8000-i1jp0gsn9.brevlab.com';
 
 // Tab switching
 document.getElementById('login-tab').addEventListener('click', () => {

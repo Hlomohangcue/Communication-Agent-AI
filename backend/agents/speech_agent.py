@@ -1,35 +1,19 @@
-import os
 from typing import Dict, Any
-import google.generativeai as genai
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from config import GEMINI_API_KEY
+import logging
+
+try:
+    from services.llm_client import GeminiClient
+except ImportError:
+    from backend.services.llm_client import GeminiClient
+
+
+logger = logging.getLogger(__name__)
 
 class SpeechAgent:
     def __init__(self):
-        api_key = GEMINI_API_KEY
-        print(f"=== SpeechAgent Initialization ===")
-        print(f"API Key present: {'YES' if api_key else 'NO'}")
-        print(f"API Key length: {len(api_key) if api_key else 0}")
-        
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-                # Try different model names based on API version
-                try:
-                    self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
-                except:
-                    try:
-                        self.model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-                    except:
-                        self.model = genai.GenerativeModel('models/gemini-pro')
-                print("✓ Gemini model initialized successfully for speech generation")
-            except Exception as e:
-                print(f"✗ Error initializing Gemini: {e}")
-                self.model = None
-        else:
-            print("✗ No API key found, using fallback template responses")
-            self.model = None
+        self.client = GeminiClient()
+        self.model = self.client.model
+        logger.info("SpeechAgent initialized (gemini_available=%s)", bool(self.model))
     
     async def generate_output(self, intent: str, semantic_meaning: str, confidence: float) -> Dict[str, Any]:
         if self.model:
@@ -46,6 +30,8 @@ Generate a warm, helpful response that:
 3. Offers support or assistance if needed
 4. Is concise (1-3 sentences)
 5. Is appropriate for a classroom setting
+6. Avoids harmful or unsafe instructions
+7. If information is uncertain, state uncertainty briefly and ask a clarifying follow-up
 
 If the student asked a specific question (like "what is 1+1"), answer it directly and clearly.
 
@@ -63,7 +49,7 @@ Provide only the response text, nothing else."""
                     "generation_method": "ai"
                 }
             except Exception as e:
-                print(f"Gemini API error: {e}")
+                logger.exception("SpeechAgent Gemini call failed: %s", e)
                 return self._fallback_output(intent, semantic_meaning)
         else:
             return self._fallback_output(intent, semantic_meaning)

@@ -1,4 +1,4 @@
-const API_BASE = 'https://8000-i1jp0gsn9.brevlab.com';
+const API_BASE = window.API_BASE || localStorage.getItem('apiBaseUrl') || 'https://8000-i1jp0gsn9.brevlab.com';
 
 let currentSessionId = null;
 let isProcessing = false;
@@ -1298,7 +1298,9 @@ async function loadLogs() {
             : `${API_BASE}/logs?limit=20`;
         
         console.log('Loading logs from:', url);
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: getAuthHeaders()
+        });
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -1677,7 +1679,7 @@ async function sendNonverbalMessage(input) {
         // Use existing communication endpoint
         const response = await fetch(`${API_BASE}/simulate/step`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 session_id: currentSessionId,
                 input_text: input
@@ -1709,7 +1711,7 @@ async function sendVerbalMessage(text) {
         // Translate text to gestures
         const response = await fetch(`${API_BASE}/translate/text-to-gesture`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
                 text: text,
                 session_id: currentSessionId

@@ -1,26 +1,44 @@
+import logging
+import uuid
+from datetime import datetime
+from typing import Optional, Dict, Any, List
+
+import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-import uvicorn
-from datetime import datetime
-import uuid
+from pydantic import BaseModel, Field
 
-from coordinator.orchestrator import Coordinator
-from simulation.classroom_sim import ClassroomSimulation
-from database.db import Database
-from agents.gesture_agent import GestureAgent
-from auth.auth_handler import AuthHandler
-from services.vision_service import VisionService
-from services.gesture_meanings import GestureMeaningService
+try:
+    from coordinator.orchestrator import Coordinator
+    from simulation.classroom_sim import ClassroomSimulation
+    from database.db import Database
+    from agents.gesture_agent import GestureAgent
+    from auth.auth_handler import AuthHandler
+    from services.vision_service import VisionService
+    from services.gesture_meanings import GestureMeaningService
+    from core.logging_config import configure_logging
+    from core.settings import settings
+except ImportError:
+    from backend.coordinator.orchestrator import Coordinator
+    from backend.simulation.classroom_sim import ClassroomSimulation
+    from backend.database.db import Database
+    from backend.agents.gesture_agent import GestureAgent
+    from backend.auth.auth_handler import AuthHandler
+    from backend.services.vision_service import VisionService
+    from backend.services.gesture_meanings import GestureMeaningService
+    from backend.core.logging_config import configure_logging
+    from backend.core.settings import settings
 
-app = FastAPI(title="Communication Bridge AI")
+
+configure_logging()
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -59,46 +77,47 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
 
 class SignupRequest(BaseModel):
-    name: str
-    email: str
-    password: str
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=8, max_length=256)
 
 class LoginRequest(BaseModel):
     email: str
     password: str
 
 class CommunicateRequest(BaseModel):
-    input_text: str
+    input_text: str = Field(min_length=1)
     user_type: str = "nonverbal"
     session_id: Optional[str] = None
 
 class SimulationStepRequest(BaseModel):
     session_id: str
-    input_text: str
+    input_text: str = Field(min_length=1)
 
 class TextToGestureRequest(BaseModel):
-    text: str
+    text: str = Field(min_length=1)
     session_id: Optional[str] = None
 
 class AddPhraseRequest(BaseModel):
-    text: str
-    category: str
+    text: str = Field(min_length=1)
+    category: str = Field(min_length=1)
     gesture_sequence: Optional[str] = None
 
 class SaveMessageRequest(BaseModel):
     session_id: str
-    input_text: str
-    output_text: str
+    input_text: str = Field(min_length=1)
+    output_text: str = Field(min_length=1)
     intent: str = "manual_save"
     confidence: float = 1.0
 
 class ProcessFrameRequest(BaseModel):
-    frame: str  # Base64 encoded image
+    frame: str = ""  # Base64 encoded image
     session_id: Optional[str] = None
+    gestures: Optional[List[Dict[str, Any]]] = None
 
 @app.get("/")
 async def root():
-    return {"status": "Communication Bridge AI is running", "version": "1.0.0"}
+    return {"status": "Communication Bridge AI is running", "version": settings.app_version}
 
 # Authentication Endpoints
 
@@ -106,7 +125,8 @@ async def root():
 async def signup(request: SignupRequest):
     """Create a new user account"""
     # Check if user already exists
-    existing_user = db.get_user_by_email(request.email)
+    normalized_email = request.email.strip().lower()
+    existing_user = db.get_user_by_email(normalized_email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -115,13 +135,13 @@ async def signup(request: SignupRequest):
     
     # Create user
     user_id = str(uuid.uuid4())
-    db.create_user(user_id, request.email, request.name, password_hash)
+    db.create_user(user_id, normalized_email, request.name.strip(), password_hash)
     
     return {
         "message": "User created successfully",
         "user": {
             "id": user_id,
-            "email": request.email,
+            "email": normalized_email,
             "name": request.name,
             "credits": 100
         }
@@ -131,7 +151,8 @@ async def signup(request: SignupRequest):
 async def login(request: LoginRequest):
     """Login and get access token"""
     # Get user
-    user = db.get_user_by_email(request.email)
+    normalized_email = request.email.strip().lower()
+    user = db.get_user_by_email(normalized_email)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
@@ -212,7 +233,8 @@ async def simulation_step(request: SimulationStepRequest, current_user: dict = D
     return result
 
 @app.post("/communicate")
-async def communicate(request: CommunicateRequest):
+async def communicate(request: CommunicateRequest, current_user: dict = Depends(get_current_user)):
+    _ = current_user
     result = await coordinator.process_communication(
         input_text=request.input_text,
         user_type=request.user_type,
@@ -221,12 +243,14 @@ async def communicate(request: CommunicateRequest):
     return result
 
 @app.get("/logs")
-async def get_logs(session_id: Optional[str] = None, limit: int = 50):
+async def get_logs(session_id: Optional[str] = None, limit: int = 50, current_user: dict = Depends(get_current_user)):
+    _ = current_user
     logs = db.get_agent_logs(session_id, limit)
     return {"logs": logs}
 
 @app.get("/session/{session_id}")
-async def get_session(session_id: str):
+async def get_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    _ = current_user
     session = db.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -234,13 +258,15 @@ async def get_session(session_id: str):
     return {"session": session, "messages": messages}
 
 @app.get("/sessions")
-async def list_sessions(limit: int = 20):
+async def list_sessions(limit: int = 20, current_user: dict = Depends(get_current_user)):
+    _ = current_user
     sessions = db.get_recent_sessions(limit)
     return {"sessions": sessions}
 
 @app.post("/save_message")
-async def save_message(request: SaveMessageRequest):
+async def save_message(request: SaveMessageRequest, current_user: dict = Depends(get_current_user)):
     """Save a message directly to the database (for verbal-to-nonverbal mode)"""
+    _ = current_user
     try:
         db.store_message(
             session_id=request.session_id,
@@ -251,6 +277,7 @@ async def save_message(request: SaveMessageRequest):
         )
         return {"success": True, "message": "Message saved successfully"}
     except Exception as e:
+        logger.exception("Failed to save message: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Gesture Translation Endpoints
@@ -301,8 +328,9 @@ async def get_phrases(category: Optional[str] = None):
     }
 
 @app.post("/phrases/custom")
-async def add_custom_phrase(request: AddPhraseRequest):
+async def add_custom_phrase(request: AddPhraseRequest, current_user: dict = Depends(get_current_user)):
     """Add a custom phrase to the library"""
+    _ = current_user
     try:
         db.add_phrase(
             text=request.text,
@@ -312,11 +340,13 @@ async def add_custom_phrase(request: AddPhraseRequest):
         )
         return {"success": True, "message": "Phrase added successfully"}
     except Exception as e:
+        logger.exception("Failed adding custom phrase: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/gesture-history/{session_id}")
-async def get_gesture_history(session_id: str, limit: int = 50):
+async def get_gesture_history(session_id: str, limit: int = 50, current_user: dict = Depends(get_current_user)):
     """Get gesture translation history for a session"""
+    _ = current_user
     history = db.get_gesture_sequences(session_id, limit)
     return {"history": history}
 
@@ -373,7 +403,7 @@ async def gesture_to_text(request: ProcessFrameRequest, current_user: dict = Dep
         "communication_result": comm_result,
         "detected_gestures": vision_result["gestures"],
         "emojis": vision_result["emojis"],
-        "ai_response": comm_result.get("output", {}).get("text", "")
+        "ai_response": comm_result.get("output", "")
     }
 
 @app.post("/vision/interpret-gesture")
@@ -382,8 +412,19 @@ async def interpret_gesture(request: ProcessFrameRequest, current_user: dict = D
     NEW: Process frame, detect gesture, interpret meaning, and generate contextual response
     Enhanced flow: Webcam → Gesture → Meaning → Contextual Response
     """
-    # Process frame to detect gestures
-    vision_result = vision_service.process_frame(request.frame)
+    # If caller already has gestures (e.g., UI auto-interpret mode), use them.
+    if request.gestures:
+        derived_emojis = [vision_service.gesture_to_emoji.get(g.get("gesture", ""), "") for g in request.gestures]
+        vision_result = {
+            "hands_detected": len(request.gestures),
+            "gestures": request.gestures,
+            "emojis": [emoji for emoji in derived_emojis if emoji],
+            "confidence": 0.8,
+        }
+    else:
+        if not request.frame:
+            raise HTTPException(status_code=400, detail="Either frame or gestures is required")
+        vision_result = vision_service.process_frame(request.frame)
     
     if not vision_result.get("gestures"):
         return {
@@ -425,4 +466,4 @@ async def interpret_gesture(request: ProcessFrameRequest, current_user: dict = D
     }
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=settings.host, port=settings.port)

@@ -1,28 +1,18 @@
-import os
 from typing import Dict, Any, Optional
-import google.generativeai as genai
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from config import GEMINI_API_KEY
+import logging
+
+try:
+    from services.llm_client import GeminiClient
+except ImportError:
+    from backend.services.llm_client import GeminiClient
+
+
+logger = logging.getLogger(__name__)
 
 class IntentAgent:
     def __init__(self):
-        api_key = GEMINI_API_KEY
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-                try:
-                    self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
-                except:
-                    try:
-                        self.model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-                    except:
-                        self.model = genai.GenerativeModel('models/gemini-pro')
-            except Exception as e:
-                print(f"Error initializing Gemini in IntentAgent: {e}")
-                self.model = None
-        else:
-            self.model = None
+        self.client = GeminiClient()
+        self.model = self.client.model
     
     async def detect_intent(self, semantic_meaning: str, context: Optional[Dict] = None) -> Dict[str, Any]:
         prompt = f"""Analyze the following communication and determine the user's intent.
@@ -66,7 +56,7 @@ Explanation: [brief explanation]
                     elif line.startswith("Confidence:"):
                         try:
                             confidence = float(line.split(":", 1)[1].strip())
-                        except:
+                        except ValueError:
                             confidence = 0.7
                     elif line.startswith("Explanation:"):
                         explanation = line.split(":", 1)[1].strip()
@@ -78,6 +68,7 @@ Explanation: [brief explanation]
                     "raw_response": result_text
                 }
             except Exception as e:
+                logger.exception("IntentAgent Gemini call failed: %s", e)
                 return self._fallback_intent(semantic_meaning)
         else:
             return self._fallback_intent(semantic_meaning)
