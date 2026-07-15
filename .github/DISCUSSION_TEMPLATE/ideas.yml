@@ -1,0 +1,10 @@
+title: Ideas
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: Share product, architecture, or UX ideas.
+    validations:
+      required: true
