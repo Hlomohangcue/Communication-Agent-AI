@@ -32,8 +32,9 @@ class Database:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
-                user_id TEXT,
+                user_id TEXT NOT NULL,
                 created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
                 metadata TEXT,
                 status TEXT DEFAULT 'active',
                 FOREIGN KEY (user_id) REFERENCES users(id)
@@ -92,21 +93,46 @@ class Database:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
+
+        self._migrate_schema(cursor)
+        self._ensure_indexes(cursor)
         
         conn.commit()
         conn.close()
+
+    @staticmethod
+    def _column_exists(cursor, table_name: str, column_name: str) -> bool:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        return any(row[1] == column_name for row in cursor.fetchall())
+
+    def _migrate_schema(self, cursor) -> None:
+        # Older databases may not have updated_at on sessions.
+        if not self._column_exists(cursor, "sessions", "updated_at"):
+            cursor.execute("ALTER TABLE sessions ADD COLUMN updated_at TEXT")
+            cursor.execute("UPDATE sessions SET updated_at = created_at WHERE updated_at IS NULL")
+
+        # Backward-compatible: ensure user_id column exists on legacy databases.
+        if not self._column_exists(cursor, "sessions", "user_id"):
+            cursor.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
+
+    def _ensure_indexes(self, cursor) -> None:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_created ON sessions(user_id, created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_logs_session_created ON agent_logs(session_id, created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gesture_sequences_session_created ON gesture_sequences(session_id, created_at DESC)")
     
-    def create_session(self, session_id: str, metadata: Optional[Dict] = None):
+    def create_session(self, session_id: str, user_id: str, metadata: Optional[Dict] = None):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
+        now = datetime.utcnow().isoformat()
         cursor.execute(
-            "INSERT INTO sessions (id, created_at, metadata) VALUES (?, ?, ?)",
-            (session_id, datetime.utcnow().isoformat(), json.dumps(metadata or {}))
+            "INSERT INTO sessions (id, user_id, created_at, updated_at, metadata) VALUES (?, ?, ?, ?, ?)",
+            (session_id, user_id, now, now, json.dumps(metadata or {}))
         )
         conn.commit()
         conn.close()
     
-    def get_session(self, session_id: str) -> Optional[Dict]:
+    def get_session_by_id(self, session_id: str) -> Optional[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -117,19 +143,38 @@ class Database:
         if row:
             return {
                 "id": row["id"],
+                "user_id": row["user_id"],
                 "created_at": row["created_at"],
-                "metadata": json.loads(row["metadata"]),
+                "updated_at": row["updated_at"],
+                "metadata": json.loads(row["metadata"] or "{}"),
+                "status": row["status"]
+            }
+        return None
+
+    def get_session(self, session_id: str, user_id: str) -> Optional[Dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return {
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "metadata": json.loads(row["metadata"] or "{}"),
                 "status": row["status"]
             }
         return None
     
-    def get_recent_sessions(self, limit: int = 20) -> List[Dict]:
+    def get_recent_sessions(self, user_id: str, limit: int = 20) -> List[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?",
-            (limit,)
+            "SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit)
         )
         rows = cursor.fetchall()
         conn.close()
@@ -138,29 +183,46 @@ class Database:
             {
                 "id": row["id"],
                 "created_at": row["created_at"],
-                "metadata": json.loads(row["metadata"]),
+                "metadata": json.loads(row["metadata"] or "{}"),
                 "status": row["status"]
             }
             for row in rows
         ]
     
-    def store_message(self, session_id: str, input_text: str, output_text: str, intent: str, confidence: float = 1.0):
+    def _touch_session(self, cursor, session_id: str) -> None:
+        cursor.execute(
+            "UPDATE sessions SET updated_at = ? WHERE id = ?",
+            (datetime.utcnow().isoformat(), session_id)
+        )
+
+    def store_message(self, session_id: str, user_id: str, input_text: str, output_text: str, intent: str, confidence: float = 1.0):
+        if not self.get_session(session_id, user_id):
+            raise PermissionError("Session not found for user")
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO messages (session_id, input_text, output_text, intent, created_at) VALUES (?, ?, ?, ?, ?)",
             (session_id, input_text, output_text, intent, datetime.utcnow().isoformat())
         )
+        self._touch_session(cursor, session_id)
         conn.commit()
         conn.close()
     
-    def get_messages(self, session_id: str, limit: int = 50) -> List[Dict]:
+    def get_messages(self, session_id: str, user_id: str, limit: int = 50) -> List[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
-            (session_id, limit)
+            """
+            SELECT m.*
+            FROM messages m
+            JOIN sessions s ON s.id = m.session_id
+            WHERE m.session_id = ? AND s.user_id = ?
+            ORDER BY m.created_at DESC
+            LIMIT ?
+            """,
+            (session_id, user_id, limit)
         )
         rows = cursor.fetchall()
         conn.close()
@@ -177,30 +239,48 @@ class Database:
             for row in rows
         ]
     
-    def log_agent_action(self, session_id: str, agent_name: str, action: str, data: Dict[str, Any]):
+    def log_agent_action(self, session_id: str, user_id: str, agent_name: str, action: str, data: Dict[str, Any]):
+        if not self.get_session(session_id, user_id):
+            raise PermissionError("Session not found for user")
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO agent_logs (session_id, agent_name, action, data, created_at) VALUES (?, ?, ?, ?, ?)",
             (session_id, agent_name, action, json.dumps(data), datetime.utcnow().isoformat())
         )
+        self._touch_session(cursor, session_id)
         conn.commit()
         conn.close()
     
-    def get_agent_logs(self, session_id: Optional[str] = None, limit: int = 50) -> List[Dict]:
+    def get_agent_logs(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[Dict]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
         if session_id:
             cursor.execute(
-                "SELECT * FROM agent_logs WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
-                (session_id, limit)
+                """
+                SELECT l.*
+                FROM agent_logs l
+                JOIN sessions s ON s.id = l.session_id
+                WHERE l.session_id = ? AND s.user_id = ?
+                ORDER BY l.created_at DESC
+                LIMIT ?
+                """,
+                (session_id, user_id, limit)
             )
         else:
             cursor.execute(
-                "SELECT * FROM agent_logs ORDER BY created_at DESC LIMIT ?",
-                (limit,)
+                """
+                SELECT l.*
+                FROM agent_logs l
+                JOIN sessions s ON s.id = l.session_id
+                WHERE s.user_id = ?
+                ORDER BY l.created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit)
             )
         
         rows = cursor.fetchall()
@@ -217,6 +297,22 @@ class Database:
             }
             for row in rows
         ]
+
+    def delete_session(self, session_id: str, user_id: str) -> bool:
+        if not self.get_session(session_id, user_id):
+            return False
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        cursor.execute("DELETE FROM agent_logs WHERE session_id = ?", (session_id,))
+        cursor.execute("DELETE FROM gesture_sequences WHERE session_id = ?", (session_id,))
+        cursor.execute("DELETE FROM credit_usage WHERE session_id = ? AND user_id = ?", (session_id, user_id))
+        cursor.execute("DELETE FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return deleted
 
     def init_gesture_tables(self):
         """Initialize gesture-related tables"""
@@ -264,25 +360,36 @@ class Database:
         conn.commit()
         conn.close()
     
-    def store_gesture_sequence(self, session_id: str, source_text: str, gesture_sequence: str, method: str):
+    def store_gesture_sequence(self, session_id: str, user_id: str, source_text: str, gesture_sequence: str, method: str):
         """Store a text-to-gesture translation"""
+        if not self.get_session(session_id, user_id):
+            raise PermissionError("Session not found for user")
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO gesture_sequences (session_id, source_text, gesture_sequence, method, created_at) VALUES (?, ?, ?, ?, ?)",
             (session_id, source_text, gesture_sequence, method, datetime.utcnow().isoformat())
         )
+        self._touch_session(cursor, session_id)
         conn.commit()
         conn.close()
     
-    def get_gesture_sequences(self, session_id: str, limit: int = 50) -> List[Dict]:
+    def get_gesture_sequences(self, session_id: str, user_id: str, limit: int = 50) -> List[Dict]:
         """Get gesture translation history for a session"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT * FROM gesture_sequences WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
-            (session_id, limit)
+            """
+            SELECT g.*
+            FROM gesture_sequences g
+            JOIN sessions s ON s.id = g.session_id
+            WHERE g.session_id = ? AND s.user_id = ?
+            ORDER BY g.created_at DESC
+            LIMIT ?
+            """,
+            (session_id, user_id, limit)
         )
         rows = cursor.fetchall()
         conn.close()

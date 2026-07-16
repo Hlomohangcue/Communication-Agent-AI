@@ -4,7 +4,9 @@ from datetime import datetime
 
 class Session(BaseModel):
     id: str
+    user_id: str
     created_at: datetime
+    updated_at: datetime
     metadata: Optional[Dict[str, Any]] = {}
     status: str = "active"
 

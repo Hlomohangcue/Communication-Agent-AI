@@ -52,6 +52,17 @@ auth_handler = AuthHandler()
 vision_service = VisionService()  # Initialize vision service
 gesture_meaning_service = GestureMeaningService()  # Initialize gesture meaning service
 
+
+def require_owned_session(session_id: str, user_id: str) -> Dict[str, Any]:
+    session = db.get_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return session
+
 # Authentication dependency
 async def get_current_user(authorization: Optional[str] = Header(None)):
     if not authorization:
@@ -201,7 +212,7 @@ async def get_credits(current_user: dict = Depends(get_current_user)):
 
 @app.post("/simulate/start")
 async def start_simulation(current_user: dict = Depends(get_current_user)):
-    session_id = simulation.start_session()
+    session_id = simulation.start_session(current_user["id"])
     return {
         "session_id": session_id,
         "status": "started",
@@ -211,6 +222,8 @@ async def start_simulation(current_user: dict = Depends(get_current_user)):
 
 @app.post("/simulate/step")
 async def simulation_step(request: SimulationStepRequest, current_user: dict = Depends(get_current_user)):
+    require_owned_session(request.session_id, current_user["id"])
+
     # Check if user has credits (unless they're on pro plan)
     if current_user["plan"] == "free":
         credits = db.get_user_credits(current_user["id"])
@@ -223,8 +236,13 @@ async def simulation_step(request: SimulationStepRequest, current_user: dict = D
         # Use 1 credit
         if not db.use_credits(current_user["id"], 1, request.session_id, "message"):
             raise HTTPException(status_code=402, detail="Failed to deduct credits")
-    
-    result = await simulation.process_step(request.session_id, request.input_text)
+
+    try:
+        result = await simulation.process_step(request.session_id, current_user["id"], request.input_text)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
     
     # Add remaining credits to response
     remaining_credits = db.get_user_credits(current_user["id"])
@@ -234,42 +252,63 @@ async def simulation_step(request: SimulationStepRequest, current_user: dict = D
 
 @app.post("/communicate")
 async def communicate(request: CommunicateRequest, current_user: dict = Depends(get_current_user)):
-    _ = current_user
-    result = await coordinator.process_communication(
-        input_text=request.input_text,
-        user_type=request.user_type,
-        session_id=request.session_id
-    )
+    if request.session_id:
+        require_owned_session(request.session_id, current_user["id"])
+
+    try:
+        result = await coordinator.process_communication(
+            input_text=request.input_text,
+            user_type=request.user_type,
+            session_id=request.session_id,
+            user_id=current_user["id"]
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
     return result
 
 @app.get("/logs")
 async def get_logs(session_id: Optional[str] = None, limit: int = 50, current_user: dict = Depends(get_current_user)):
-    _ = current_user
-    logs = db.get_agent_logs(session_id, limit)
+    if session_id:
+        require_owned_session(session_id, current_user["id"])
+
+    logs = db.get_agent_logs(current_user["id"], session_id, limit)
     return {"logs": logs}
 
 @app.get("/session/{session_id}")
 async def get_session(session_id: str, current_user: dict = Depends(get_current_user)):
-    _ = current_user
-    session = db.get_session(session_id)
+    require_owned_session(session_id, current_user["id"])
+    session = db.get_session(session_id, current_user["id"])
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    messages = db.get_messages(session_id)
+    messages = db.get_messages(session_id, current_user["id"])
     return {"session": session, "messages": messages}
+
+
+@app.delete("/session/{session_id}")
+async def delete_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    require_owned_session(session_id, current_user["id"])
+    deleted = db.delete_session(session_id, current_user["id"])
+    simulation.remove_session(session_id, current_user["id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"success": True, "message": "Session deleted successfully"}
 
 @app.get("/sessions")
 async def list_sessions(limit: int = 20, current_user: dict = Depends(get_current_user)):
-    _ = current_user
-    sessions = db.get_recent_sessions(limit)
+    sessions = db.get_recent_sessions(current_user["id"], limit)
     return {"sessions": sessions}
 
 @app.post("/save_message")
 async def save_message(request: SaveMessageRequest, current_user: dict = Depends(get_current_user)):
     """Save a message directly to the database (for verbal-to-nonverbal mode)"""
-    _ = current_user
+    require_owned_session(request.session_id, current_user["id"])
     try:
         db.store_message(
             session_id=request.session_id,
+            user_id=current_user["id"],
             input_text=request.input_text,
             output_text=request.output_text,
             intent=request.intent,
@@ -283,15 +322,17 @@ async def save_message(request: SaveMessageRequest, current_user: dict = Depends
 # Gesture Translation Endpoints
 
 @app.post("/translate/text-to-gesture")
-async def translate_text_to_gesture(request: TextToGestureRequest):
+async def translate_text_to_gesture(request: TextToGestureRequest, current_user: dict = Depends(get_current_user)):
     """Convert text to gesture sequence for non-verbal users"""
     try:
         result = gesture_agent.text_to_gestures(request.text)
         
         # Store in database if session provided
         if request.session_id:
+            require_owned_session(request.session_id, current_user["id"])
             db.store_gesture_sequence(
                 session_id=request.session_id,
+                user_id=current_user["id"],
                 source_text=request.text,
                 gesture_sequence=result["gesture_sequence"],
                 method=result["method"]
@@ -346,15 +387,18 @@ async def add_custom_phrase(request: AddPhraseRequest, current_user: dict = Depe
 @app.get("/gesture-history/{session_id}")
 async def get_gesture_history(session_id: str, limit: int = 50, current_user: dict = Depends(get_current_user)):
     """Get gesture translation history for a session"""
-    _ = current_user
-    history = db.get_gesture_sequences(session_id, limit)
+    require_owned_session(session_id, current_user["id"])
+    history = db.get_gesture_sequences(session_id, current_user["id"], limit)
     return {"history": history}
 
 # Computer Vision Endpoints
 
 @app.post("/vision/process-frame")
-async def process_frame(request: ProcessFrameRequest):
+async def process_frame(request: ProcessFrameRequest, current_user: dict = Depends(get_current_user)):
     """Process a webcam frame and detect gestures"""
+    if request.session_id:
+        require_owned_session(request.session_id, current_user["id"])
+
     result = vision_service.process_frame(request.frame)
     
     # If gestures detected and session provided, store them
@@ -389,13 +433,22 @@ async def gesture_to_text(request: ProcessFrameRequest, current_user: dict = Dep
     
     # Convert emojis to text
     emoji_input = " ".join(vision_result["emojis"])
+
+    if request.session_id:
+        require_owned_session(request.session_id, current_user["id"])
     
     # Process through communication pipeline
-    comm_result = await coordinator.process_communication(
-        input_text=emoji_input,
-        user_type="nonverbal",
-        session_id=request.session_id
-    )
+    try:
+        comm_result = await coordinator.process_communication(
+            input_text=emoji_input,
+            user_type="nonverbal",
+            session_id=request.session_id,
+            user_id=current_user["id"]
+        )
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
     
     return {
         "success": True,
@@ -446,8 +499,10 @@ async def interpret_gesture(request: ProcessFrameRequest, current_user: dict = D
     # Store in database if session provided
     if request.session_id:
         emoji_text = " ".join(vision_result["emojis"])
+        require_owned_session(request.session_id, current_user["id"])
         db.store_message(
             session_id=request.session_id,
+            user_id=current_user["id"],
             input_text=f"[Gesture] {', '.join(gesture_names)}",
             output_text=interpretation["response"],
             intent="gesture_interpretation",

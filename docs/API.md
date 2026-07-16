@@ -19,6 +19,7 @@
 - POST /communicate
 - GET /logs
 - GET /session/{session_id}
+- DELETE /session/{session_id}
 - GET /sessions
 - POST /save_message
 
@@ -37,3 +38,12 @@
 
 ## Authentication Notes
 Most stateful and operational endpoints require Bearer auth.
+
+## Session Ownership Rules
+- Session ownership is determined server-side from JWT `sub`.
+- The frontend never sends `user_id` for session access.
+- Session-bound data access is enforced per owner across messages, logs, and gesture history.
+- Authorization outcomes:
+  - 401 for unauthenticated requests
+  - 403 for authenticated non-owners
+  - 404 when a session does not exist

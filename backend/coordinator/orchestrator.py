@@ -25,34 +25,43 @@ class Coordinator:
         self, 
         input_text: str, 
         user_type: str = "nonverbal",
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
+        if not user_id:
+            raise ValueError("user_id is required for communication processing")
+
         if not session_id:
             session_id = str(uuid.uuid4())
-            self.db.create_session(session_id)
+            self.db.create_session(session_id, user_id)
+        else:
+            if not self.db.get_session_by_id(session_id):
+                raise ValueError("Session not found")
+            if not self.db.get_session(session_id, user_id):
+                raise PermissionError("Not authorized for this session")
         
         workflow = []
         
         # Step 1: Non-verbal interpretation
-        self._log_agent_action(session_id, "nonverbal_agent", "started", {"input": input_text})
+        self._log_agent_action(session_id, user_id, "nonverbal_agent", "started", {"input": input_text})
         interpretation = await self.nonverbal_agent.interpret(input_text)
         workflow.append({"agent": "nonverbal_agent", "result": interpretation})
-        self._log_agent_action(session_id, "nonverbal_agent", "completed", interpretation)
+        self._log_agent_action(session_id, user_id, "nonverbal_agent", "completed", interpretation)
         
         # Step 2: Intent detection
-        self._log_agent_action(session_id, "intent_agent", "started", {"interpreted": interpretation})
+        self._log_agent_action(session_id, user_id, "intent_agent", "started", {"interpreted": interpretation})
         intent_result = await self.intent_agent.detect_intent(interpretation["semantic_meaning"])
         workflow.append({"agent": "intent_agent", "result": intent_result})
-        self._log_agent_action(session_id, "intent_agent", "completed", intent_result)
+        self._log_agent_action(session_id, user_id, "intent_agent", "completed", intent_result)
         
         # Step 3: Check confidence and retry if needed
         if intent_result["confidence"] < self.confidence_threshold:
-            self._log_agent_action(session_id, "coordinator", "retry", {
+            self._log_agent_action(session_id, user_id, "coordinator", "retry", {
                 "reason": "low_confidence",
                 "confidence": intent_result["confidence"]
             })
             # Retry with context
-            context = self.context_agent.get_context(session_id)
+            context = self.context_agent.get_context(session_id, user_id)
             intent_result = await self.intent_agent.detect_intent(
                 interpretation["semantic_meaning"],
                 context=context
@@ -60,17 +69,17 @@ class Coordinator:
             workflow.append({"agent": "intent_agent_retry", "result": intent_result})
         
         # Step 4: Generate speech/text output
-        self._log_agent_action(session_id, "speech_agent", "started", {"intent": intent_result})
+        self._log_agent_action(session_id, user_id, "speech_agent", "started", {"intent": intent_result})
         output = await self.speech_agent.generate_output(
             intent=intent_result["intent"],
             semantic_meaning=interpretation["semantic_meaning"],
             confidence=intent_result["confidence"]
         )
         workflow.append({"agent": "speech_agent", "result": output})
-        self._log_agent_action(session_id, "speech_agent", "completed", output)
+        self._log_agent_action(session_id, user_id, "speech_agent", "completed", output)
         
         # Step 5: Update context
-        self.context_agent.update_context(session_id, {
+        self.context_agent.update_context(session_id, user_id, {
             "input": input_text,
             "interpretation": interpretation,
             "intent": intent_result,
@@ -78,7 +87,7 @@ class Coordinator:
         })
         
         # Store message
-        self.db.store_message(session_id, input_text, output["text"], intent_result["intent"])
+        self.db.store_message(session_id, user_id, input_text, output["text"], intent_result["intent"])
         
         return {
             "session_id": session_id,
@@ -90,5 +99,5 @@ class Coordinator:
             "timestamp": datetime.utcnow().isoformat()
         }
     
-    def _log_agent_action(self, session_id: str, agent_name: str, action: str, data: Dict[str, Any]):
-        self.db.log_agent_action(session_id, agent_name, action, data)
+    def _log_agent_action(self, session_id: str, user_id: str, agent_name: str, action: str, data: Dict[str, Any]):
+        self.db.log_agent_action(session_id, user_id, agent_name, action, data)

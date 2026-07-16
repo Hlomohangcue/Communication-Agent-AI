@@ -5,13 +5,18 @@ class ContextAgent:
     def __init__(self, db):
         self.db = db
         self.session_contexts = {}
+
+    @staticmethod
+    def _context_key(session_id: str, user_id: str) -> str:
+        return f"{user_id}:{session_id}"
     
-    def get_context(self, session_id: str) -> Optional[Dict[str, Any]]:
-        if session_id in self.session_contexts:
-            return self.session_contexts[session_id]
+    def get_context(self, session_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        key = self._context_key(session_id, user_id)
+        if key in self.session_contexts:
+            return self.session_contexts[key]
         
         # Load from database
-        messages = self.db.get_messages(session_id, limit=5)
+        messages = self.db.get_messages(session_id, user_id, limit=5)
         if messages:
             return {
                 "recent_messages": messages,
@@ -19,15 +24,16 @@ class ContextAgent:
             }
         return None
     
-    def update_context(self, session_id: str, interaction: Dict[str, Any]):
-        if session_id not in self.session_contexts:
-            self.session_contexts[session_id] = {
+    def update_context(self, session_id: str, user_id: str, interaction: Dict[str, Any]):
+        key = self._context_key(session_id, user_id)
+        if key not in self.session_contexts:
+            self.session_contexts[key] = {
                 "interactions": [],
                 "patterns": {},
                 "created_at": datetime.utcnow().isoformat()
             }
         
-        context = self.session_contexts[session_id]
+        context = self.session_contexts[key]
         context["interactions"].append({
             "timestamp": datetime.utcnow().isoformat(),
             "input": interaction.get("input"),

@@ -8,14 +8,15 @@ class ClassroomSimulation:
         self.db = db
         self.active_sessions = {}
     
-    def start_session(self) -> str:
+    def start_session(self, user_id: str) -> str:
         session_id = str(uuid.uuid4())
-        self.db.create_session(session_id, metadata={
+        self.db.create_session(session_id, user_id, metadata={
             "type": "classroom_simulation",
             "entities": ["nonverbal_student", "verbal_teacher", "ai_system"]
         })
         
         self.active_sessions[session_id] = {
+            "user_id": user_id,
             "started_at": datetime.utcnow().isoformat(),
             "step_count": 0,
             "entities": {
@@ -26,12 +27,14 @@ class ClassroomSimulation:
         }
         
         return session_id
-    
-    async def process_step(self, session_id: str, student_input: str) -> Dict[str, Any]:
+    async def process_step(self, session_id: str, user_id: str, student_input: str) -> Dict[str, Any]:
         if session_id not in self.active_sessions:
             raise ValueError("Session not found or not started")
         
         session = self.active_sessions[session_id]
+        if session.get("user_id") != user_id:
+            raise PermissionError("Not authorized for this session")
+
         session["step_count"] += 1
         
         # Simulate the communication flow
@@ -58,7 +61,8 @@ class ClassroomSimulation:
         result = await self.coordinator.process_communication(
             input_text=student_input,
             user_type="nonverbal",
-            session_id=session_id
+            session_id=session_id,
+            user_id=user_id
         )
         
         # Step 7: Teacher receives output
@@ -86,3 +90,8 @@ class ClassroomSimulation:
             "communication_result": result,
             "status": "completed"
         }
+
+    def remove_session(self, session_id: str, user_id: str) -> None:
+        session = self.active_sessions.get(session_id)
+        if session and session.get("user_id") == user_id:
+            self.active_sessions.pop(session_id, None)
