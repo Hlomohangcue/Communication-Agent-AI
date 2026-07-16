@@ -30,6 +30,8 @@ _load_dotenv_file()
 
 @dataclass(frozen=True)
 class AppSettings:
+    app_env: str = os.getenv("APP_ENV", "development").strip().lower()
+
     app_name: str = os.getenv("APP_NAME", "Communication Bridge AI")
     app_version: str = os.getenv("APP_VERSION", "1.1.0")
 
@@ -52,6 +54,19 @@ class AppSettings:
     cors_allow_credentials: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
 
     default_confidence_threshold: float = float(os.getenv("DEFAULT_CONFIDENCE_THRESHOLD", "0.7"))
+
+    def __post_init__(self) -> None:
+        if self.jwt_secret_key.strip():
+            return
+
+        if self.app_env in {"development", "testing"}:
+            object.__setattr__(self, "jwt_secret_key", "development-only-jwt-secret")
+            return
+
+        raise RuntimeError(
+            "JWT_SECRET_KEY is required when APP_ENV is 'staging' or 'production'. "
+            "Use APP_ENV=development or APP_ENV=testing only for non-production environments."
+        )
 
 
 settings = AppSettings()
