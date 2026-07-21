@@ -2,10 +2,16 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from agents.intent_agent import IntentAgent
-from agents.nonverbal_agent import NonVerbalAgent
-from agents.speech_agent import SpeechAgent
-from agents.context_agent import ContextAgent
+try:
+    from agents.intent_agent import IntentAgent
+    from agents.nonverbal_agent import NonVerbalAgent
+    from agents.speech_agent import SpeechAgent
+    from agents.context_agent import ContextAgent
+except ImportError:
+    from backend.agents.intent_agent import IntentAgent
+    from backend.agents.nonverbal_agent import NonVerbalAgent
+    from backend.agents.speech_agent import SpeechAgent
+    from backend.agents.context_agent import ContextAgent
 
 try:
     from core.settings import settings

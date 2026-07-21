@@ -71,6 +71,7 @@
 <body>
     <div class="container">
         <h1>Communication Bridge AI - Test Page</h1>
+        <p><strong>Development utility only.</strong> This page is not part of the production user experience.</p>
         
         <div class="status" id="status">
             Status: <span id="status-text">Not connected</span>
@@ -103,7 +104,10 @@
     </div>
     
     <script>
-        const API_BASE = 'https://8000-i1jp0gsn9.brevlab.com';
+        const API_BASE =
+            (window.location && window.location.origin && window.location.origin !== 'null')
+                ? window.location.origin
+                : 'http://localhost:8000';
         let sessionId = null;
         let isActive = false;
         

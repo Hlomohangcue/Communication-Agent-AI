@@ -1,0 +1,21 @@
+services:
+  communication-bridge-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: communication-bridge-ai
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_PATH: ${DATABASE_PATH:-/app/data/communication_bridge.db}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8000}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - comm_bridge_data:/app/data
+
+volumes:
+  comm_bridge_data:

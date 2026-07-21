@@ -1,11 +1,14 @@
 import logging
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 try:
@@ -43,7 +46,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db = Database()
+db = Database(settings.database_path)
 db.init_gesture_tables()  # Initialize gesture tables
 coordinator = Coordinator(db)
 simulation = ClassroomSimulation(coordinator, db)
@@ -51,6 +54,10 @@ gesture_agent = GestureAgent()
 auth_handler = AuthHandler()
 vision_service = VisionService()  # Initialize vision service
 gesture_meaning_service = GestureMeaningService()  # Initialize gesture meaning service
+
+frontend_dir = Path(__file__).resolve().parents[1] / "frontend"
+if frontend_dir.exists():
+    app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 
 def require_owned_session(session_id: str, user_id: str) -> Dict[str, Any]:
@@ -128,7 +135,19 @@ class ProcessFrameRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"status": "Communication Bridge AI is running", "version": settings.app_version}
+    return RedirectResponse(url="/ui")
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "app": settings.app_name,
+        "version": settings.app_version,
+    }
+
+@app.get("/ui")
+async def ui_redirect():
+    return RedirectResponse(url="/app/login.html")
 
 # Authentication Endpoints
 

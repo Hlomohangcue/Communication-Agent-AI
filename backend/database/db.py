@@ -2,11 +2,14 @@ import sqlite3
 import json
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-import os
+from pathlib import Path
 
 class Database:
     def __init__(self, db_path: str = "communication_bridge.db"):
-        self.db_path = db_path
+        resolved_path = Path(db_path).expanduser()
+        if resolved_path.parent and str(resolved_path.parent) not in {"", "."}:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = str(resolved_path)
         self.init_db()
     
     def init_db(self):
@@ -105,6 +108,14 @@ class Database:
         cursor.execute(f"PRAGMA table_info({table_name})")
         return any(row[1] == column_name for row in cursor.fetchall())
 
+    @staticmethod
+    def _table_exists(cursor, table_name: str) -> bool:
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+            (table_name,)
+        )
+        return cursor.fetchone() is not None
+
     def _migrate_schema(self, cursor) -> None:
         # Older databases may not have updated_at on sessions.
         if not self._column_exists(cursor, "sessions", "updated_at"):
@@ -119,7 +130,8 @@ class Database:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_created ON sessions(user_id, created_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_logs_session_created ON agent_logs(session_id, created_at DESC)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_gesture_sequences_session_created ON gesture_sequences(session_id, created_at DESC)")
+        if self._table_exists(cursor, "gesture_sequences"):
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_gesture_sequences_session_created ON gesture_sequences(session_id, created_at DESC)")
     
     def create_session(self, session_id: str, user_id: str, metadata: Optional[Dict] = None):
         conn = sqlite3.connect(self.db_path)

@@ -1,4 +1,9 @@
-const API_BASE = window.API_BASE || localStorage.getItem('apiBaseUrl') || 'https://8000-i1jp0gsn9.brevlab.com';
+const API_BASE =
+    window.API_BASE ||
+    localStorage.getItem('apiBaseUrl') ||
+    ((window.location && window.location.origin && window.location.origin !== 'null')
+        ? window.location.origin
+        : 'http://localhost:8000');
 
 let currentSessionId = null;
 let isProcessing = false;

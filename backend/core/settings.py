@@ -21,7 +21,7 @@ def _load_dotenv_file() -> None:
 def _split_csv(value: str, default: List[str]) -> List[str]:
     if not value:
         return default
-    items = [item.strip() for item in value.split(",") if item.strip()]
+    items = [item.strip().rstrip("/") for item in value.split(",") if item.strip()]
     return items or default
 
 
@@ -37,6 +37,8 @@ class AppSettings:
 
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8000"))
+
+    database_path: str = os.getenv("DATABASE_PATH", "data/communication_bridge.db")
 
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
@@ -56,17 +58,39 @@ class AppSettings:
     default_confidence_threshold: float = float(os.getenv("DEFAULT_CONFIDENCE_THRESHOLD", "0.7"))
 
     def __post_init__(self) -> None:
+        if self.app_env not in {"development", "testing", "staging", "production"}:
+            raise RuntimeError(
+                "APP_ENV must be one of: development, testing, staging, production"
+            )
+
         if self.jwt_secret_key.strip():
-            return
+            jwt_ok = True
+        else:
+            jwt_ok = False
 
-        if self.app_env in {"development", "testing"}:
+        if not jwt_ok and self.app_env in {"development", "testing"}:
             object.__setattr__(self, "jwt_secret_key", "development-only-jwt-secret")
-            return
+            jwt_ok = True
 
-        raise RuntimeError(
-            "JWT_SECRET_KEY is required when APP_ENV is 'staging' or 'production'. "
-            "Use APP_ENV=development or APP_ENV=testing only for non-production environments."
-        )
+        if not jwt_ok:
+            raise RuntimeError(
+                "JWT_SECRET_KEY is required when APP_ENV is 'staging' or 'production'. "
+                "Use APP_ENV=development or APP_ENV=testing only for non-production environments."
+            )
+
+        if self.app_env in {"staging", "production"}:
+            invalid_prod_origins = {
+                "*",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                "http://localhost:8000",
+            }
+            if not self.cors_origins:
+                raise RuntimeError("CORS_ORIGINS must be set for staging/production")
+            if any(origin in invalid_prod_origins for origin in self.cors_origins):
+                raise RuntimeError(
+                    "CORS_ORIGINS for staging/production must contain only explicit trusted public origins"
+                )
 
 
 settings = AppSettings()

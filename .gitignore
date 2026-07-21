@@ -22,3 +22,6 @@ ENV/
 htmlcov/
 .vscode/*
 !.vscode/settings.json
+# Cloudflare Tunnel credentials
+*.cloudflared
+.cloudflared/
