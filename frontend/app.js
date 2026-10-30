@@ -14,6 +14,7 @@ let isRecording = false;
 let finalTranscript = '';  // Track transcript across recognition restarts
 let authToken = null;  // Store auth token
 let currentUser = null;  // Store current user info
+const gestureSubmissionState = new window.GestureSubmissionState(2, 0.55);
 
 // Communication mode variables
 let currentMode = 'nonverbal-to-verbal';
@@ -1764,6 +1765,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 let webcamStream = null;
 let isCapturing = false;
 let captureInterval = null;
+let isFrameProcessing = false;
 
 // Start webcam
 async function startWebcam() {
@@ -1819,7 +1821,8 @@ function stopWebcam() {
 // Start automatic gesture detection
 function startGestureDetection() {
     isCapturing = true;
-    
+    gestureSubmissionState.startDetection();
+
     // Capture and process frames every 500ms
     captureInterval = setInterval(() => {
         if (isCapturing) {
@@ -1831,6 +1834,7 @@ function startGestureDetection() {
 // Stop gesture detection
 function stopGestureDetection() {
     isCapturing = false;
+    gestureSubmissionState.stopDetection();
     if (captureInterval) {
         clearInterval(captureInterval);
         captureInterval = null;
@@ -1839,6 +1843,12 @@ function stopGestureDetection() {
 
 // Process current webcam frame
 async function processCurrentFrame() {
+    const requestGeneration = gestureSubmissionState.generation;
+    if (isFrameProcessing || !isCapturing) {
+        return;
+    }
+
+    isFrameProcessing = true;
     try {
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
@@ -1863,178 +1873,154 @@ async function processCurrentFrame() {
                 session_id: currentSessionId
             })
         });
-        
+
+        if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const result = await response.json();
-        
-        // Update UI with detected gestures
-        updateGestureDisplay(result);
-        
+
+        if (!isCapturing) {
+            return;
+        }
+
+        gestureSubmissionState.handleFrameResult(
+            requestGeneration,
+            result,
+            (currentResult) => updateGestureDisplay(currentResult, requestGeneration)
+        );
     } catch (error) {
         console.error('Error processing frame:', error);
+        if (gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+            gestureSubmissionState.resetStability();
+        }
+    } finally {
+        isFrameProcessing = false;
     }
 }
 
 // Update gesture display and populate input field
-function updateGestureDisplay(result) {
+function updateGestureDisplay(result, requestGeneration) {
     const overlay = document.getElementById('detectedGesture');
-    
-    if (result.error) {
+
+    if (result && result.error) {
         overlay.innerHTML = `<div style="color: #f56565;">⚠️ ${result.error}</div>`;
+        gestureSubmissionState.resetStability();
         return;
     }
-    
-    if (result.hands_detected > 0 && result.gestures.length > 0) {
-        const gestureText = result.gestures.map(g => 
-            `${g.gesture} (${(g.confidence * 100).toFixed(0)}%)`
-        ).join(', ');
-        
-        const emojiText = result.emojis.join(' ');
-        
-        overlay.innerHTML = `
-            <div>👋 Detected: ${gestureText}</div>
-            <div>📝 Emojis: ${emojiText}</div>
-        `;
-        
-        // AUTO-POPULATE INPUT FIELD (like speech-to-text)
-        // Get the appropriate input field based on current mode
-        const studentInput = document.getElementById('student-input');
-        const verbalInput = document.getElementById('verbal-teacher-input');
-        
-        if (currentMode === 'nonverbal-to-verbal' && studentInput) {
-            // Add emojis to student input (non-verbal user)
+
+    const decision = gestureSubmissionState.observe(result);
+    if (decision.neutral) {
+        overlay.textContent = 'No gestures detected';
+        return;
+    }
+
+    if (!decision.gestureNames.length) {
+        overlay.textContent = 'No valid gestures detected';
+        return;
+    }
+
+    const gestureText = result.gestures.map(g =>
+        `${g.gesture} (${(g.confidence * 100).toFixed(0)}%)`
+    ).join(', ');
+
+    const emojiText = Array.isArray(result.emojis) ? result.emojis.join(' ') : '';
+
+    overlay.innerHTML = `
+        <div>👋 Detected: ${gestureText}</div>
+        <div>📝 Emojis: ${emojiText}</div>
+    `;
+
+    if (!decision.accepted || currentMode !== 'nonverbal-to-verbal') {
+        return;
+    }
+
+    const studentInput = document.getElementById('student-input');
+    if (studentInput) {
+        interpretGestureAndRespond(result, decision.gestureNames, emojiText, studentInput, requestGeneration);
+    }
+}
+
+async function interpretGestureAndRespond(visionResult, gestureNames, emojiText, studentInput, requestGeneration) {
+    if (
+        isProcessing ||
+        !isCapturing ||
+        !gestureSubmissionState.isCurrentGeneration(requestGeneration)
+    ) {
+        return;
+    }
+
+    try {
+        await gestureSubmissionState.submit(gestureNames, async () => {
             const currentText = studentInput.value.trim();
-            if (currentText) {
-                studentInput.value = currentText + ' ' + emojiText;
-            } else {
-                studentInput.value = emojiText;
-            }
-            
-            // Visual feedback
+            studentInput.value = currentText ? `${currentText} ${emojiText}` : emojiText;
             studentInput.style.backgroundColor = '#e6ffed';
             setTimeout(() => {
                 studentInput.style.backgroundColor = '';
             }, 300);
-            
-            console.log('✅ Gesture added to input:', emojiText);
-            
-            // NEW: Auto-interpret gesture and show meaning
-            interpretGestureAndRespond(result);
-        } else if (currentMode === 'verbal-to-nonverbal' && verbalInput) {
-            // In verbal-to-nonverbal mode, gestures could be used as feedback
-            // For now, just show in overlay
-            console.log('Gesture detected in verbal-to-nonverbal mode:', emojiText);
-        }
-    } else {
-        overlay.textContent = 'No gestures detected';
-    }
-}
 
-// NEW: Interpret gesture and show meaningful response
-async function interpretGestureAndRespond(visionResult) {
-    try {
-        // Call the new interpret endpoint
-        const response = await fetch(`${API_BASE}/vision/interpret-gesture`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                frame: "", // Already processed
-                session_id: currentSessionId,
-                // Pass the vision result for interpretation
-                gestures: visionResult.gestures
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.interpretation) {
-            const interp = result.interpretation;
-            
-            // Show interpretation in a notification
-            showNotification(
-                `Gesture Meaning: ${interp.message}\n\nResponse: ${interp.response}`,
-                'info'
-            );
-            
-            // Add to conversation display
-            if (interp.understood) {
-                const gestureNames = result.detected_gestures.map(g => g.gesture).join(', ');
-                addConversationMessage('student', `[Gesture: ${gestureNames}] ${result.emojis.join(' ')}`);
-                addConversationMessage('teacher', interp.response, {
-                    intent: 'gesture_interpretation',
-                    method: 'auto-response'
-                });
+            console.log('✅ Gesture accepted and queued:', emojiText);
+
+            const response = await fetch(`${API_BASE}/vision/interpret-gesture`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    frame: '',
+                    session_id: currentSessionId,
+                    gestures: visionResult.gestures
+                })
+            });
+
+            if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+                return;
             }
-            
-            console.log('✅ Gesture interpreted:', interp);
-        }
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+                return;
+            }
+
+            if (result.success && result.interpretation) {
+                const interp = result.interpretation;
+                showNotification(
+                    `Gesture Meaning: ${interp.message}\n\nResponse: ${interp.response}`,
+                    'info'
+                );
+
+                if (interp.understood) {
+                    const detectedGestureNames = (result.detected_gestures || []).map(g => g.gesture).join(', ');
+                    addConversationMessage('student', `[Gesture: ${detectedGestureNames}] ${(result.emojis || []).join(' ')}`);
+                    addConversationMessage('teacher', interp.response, {
+                        intent: 'gesture_interpretation',
+                        method: 'auto-response'
+                    });
+                }
+
+                console.log('✅ Gesture interpreted:', interp);
+            } else {
+                showNotification(result.message || 'The gesture could not be interpreted.', 'warning');
+            }
+        });
     } catch (error) {
         console.error('Error interpreting gesture:', error);
-        // Don't show error to user - gesture was still added to input
+        if (isCapturing && gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+            showNotification('Failed to interpret gesture. Release and repeat it to try again.', 'error');
+        }
     }
 }
 
-// Capture gesture and send to AI
+// Manually sample a frame; interpretation still uses the shared stability guard.
 async function captureGesture() {
-    try {
-        const video = document.getElementById('webcam');
-        const canvas = document.getElementById('canvas');
-        const context = canvas.getContext('2d');
-        
-        // Set canvas size
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
-        // Capture frame
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frameData = canvas.toDataURL('image/jpeg', 0.8);
-        
-        // Show loading
-        showNotification('Processing gesture...', 'info');
-        
-        // Send to backend for interpretation and auto-response
-        const response = await fetch(`${API_BASE}/vision/interpret-gesture`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify({
-                frame: frameData,
-                session_id: currentSessionId
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.success && result.interpretation) {
-            // Display detected gesture
-            const gestureText = result.detected_gestures.map(g => g.gesture).join(', ');
-            const emojiText = result.emojis.join(' ');
-            const interpretation = result.interpretation;
-            
-            // Add gesture to conversation
-            addConversationMessage('student', `[Gesture: ${gestureText}] ${emojiText}`);
-            
-            // Add AI response to conversation
-            if (interpretation.understood) {
-                addConversationMessage('teacher', interpretation.response, {
-                    intent: 'gesture_interpretation',
-                    method: 'auto-response'
-                });
-                
-                showNotification(`Gesture: ${gestureText} → ${interpretation.message}`, 'success');
-            } else {
-                showNotification(interpretation.message, 'warning');
-            }
-        } else {
-            showNotification(result.message || 'No gesture detected. Please try again.', 'warning');
-        }
-        
-    } catch (error) {
-        console.error('Error capturing gesture:', error);
-        showNotification(`Failed to process gesture: ${error.message}`, 'error');
-    }
+    await processCurrentFrame();
 }
 
 // Clear gesture input
