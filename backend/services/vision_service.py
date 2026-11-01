@@ -15,7 +15,7 @@ class VisionService:
     """
     Computer vision service for hand gesture recognition
     Uses MediaPipe Hands for real-time hand tracking
-    Compatible with MediaPipe v0.10.30+
+    Uses MediaPipe's legacy Solutions Hands API.
     """
     
     def __init__(self):
@@ -23,7 +23,7 @@ class VisionService:
         try:
             import mediapipe as mp
             
-            # Try to use MediaPipe v0.10.8 (old API)
+            # Use MediaPipe's legacy Solutions Hands API.
             self.mp_hands = mp.solutions.hands
             self.mp_drawing = mp.solutions.drawing_utils
             
