@@ -1,5 +1,9 @@
 # Emoji Gesture Fix Summary
 
+> Historical change note, not a current validation report. Emoji/gesture
+> mappings are generic symbolic output and do not establish ASL/SASL translation.
+> See [Current Features](docs/CURRENT_FEATURES.md).
+
 ## Issue
 The "Hi/Hello" and "No" gestures both used the 👋 emoji, causing confusion. User requested to change "Hi/Hello" to use a hand raised gesture (🙋) instead.
 

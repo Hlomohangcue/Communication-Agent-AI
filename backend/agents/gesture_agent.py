@@ -19,7 +19,7 @@ class GestureAgent:
         self.client = GeminiClient()
         self.model = self.client.model
         
-        # Gesture library with ASL meanings
+        # Generic gesture-to-emoji mappings; these are not sign-language glosses.
         self.gesture_library = {
             # Basic Communication
             "hello": "👋",

@@ -1,5 +1,9 @@
 # New Gestures Added - 18 Total Gestures
 
+> Historical implementation note: these generic pose labels and assigned
+> meanings are not validated ASL/SASL signs or linguistic translation. Current
+> recognition is heuristic. See [Limitations and Future Work](docs/LIMITATIONS_AND_FUTURE_WORK.md).
+
 ## Summary
 Added 8 new meaningful gestures including "I love you" sign, bringing the total from 10 to 18 supported gestures.
 

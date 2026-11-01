@@ -1,5 +1,9 @@
 # Pre-Deployment Checklist
 
+> Historical checklist: its provider, pricing, and deployment assumptions are
+> not current configuration and have not been validated. No deployment is
+> claimed. See [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
+
 Before deploying to Vultr, make sure you have everything ready!
 
 ---

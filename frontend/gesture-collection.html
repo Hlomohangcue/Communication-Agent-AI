@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Dataset Collection</title>
+    <style>
+        :root { color-scheme: light; font-family: Arial, sans-serif; color: #1f2937; }
+        body { max-width: 900px; margin: 0 auto; padding: 24px; background: #f3f4f6; }
+        main { padding: 24px; border-radius: 12px; background: #fff; box-shadow: 0 2px 12px #0001; }
+        h1 { margin-top: 0; }
+        .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+        label { display: grid; gap: 6px; font-weight: 600; }
+        input, select, button { min-height: 40px; padding: 8px 10px; font: inherit; }
+        video { display: block; width: 100%; max-height: 480px; margin: 18px 0; background: #111827; }
+        .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+        button { border: 0; border-radius: 6px; color: white; background: #2563eb; cursor: pointer; }
+        button.secondary { background: #4b5563; }
+        button.danger { background: #b91c1c; }
+        button:disabled { opacity: .55; cursor: not-allowed; }
+        #status { min-height: 1.5em; margin: 14px 0; }
+        .note { color: #4b5563; line-height: 1.5; }
+        .warning { padding: 12px; border-left: 4px solid #d97706; background: #fffbeb; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Gesture Dataset Collection</h1>
+    <p class="note warning">
+        Sign in as an authorised collector. Enter a pseudonymous participant ID only; do not enter a
+        name or email. The selected label is supplied by the collector, not by the current gesture
+        classifier. No video is stored; only hand landmarks and recording metadata are saved.
+    </p>
+    <div class="fields">
+        <label for="participant-id">Participant ID
+            <input id="participant-id" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
+                   autocomplete="off" placeholder="participant_001" required>
+        </label>
+        <label for="gesture-label">Collector-assigned gesture label
+            <select id="gesture-label" required></select>
+        </label>
+        <label for="hand-side">Recording hand
+            <select id="hand-side">
+                <option value="Left">Left</option>
+                <option value="Right">Right</option>
+            </select>
+        </label>
+    </div>
+    <p id="sample-type" class="note"></p>
+    <p class="note">Select <strong>unknown</strong> only for a real unsupported or ambiguous pose, not for an absent hand.</p>
+    <video id="camera" autoplay playsinline muted></video>
+    <canvas id="frame" hidden></canvas>
+    <div class="actions">
+        <button type="button" id="start-recording">Start recording</button>
+        <button type="button" id="stop-recording" class="secondary" disabled>Stop recording</button>
+        <button type="button" id="save-recording" disabled>Save recording</button>
+        <button type="button" id="discard-recording" class="danger" disabled>Discard recording</button>
+        <button type="button" id="stop-camera" class="secondary">Stop camera</button>
+        <a href="dashboard.html">Return to dashboard</a>
+    </div>
+    <p id="sample-count" aria-live="polite">Captured samples: 0</p>
+    <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script src="gesture_collection.js"></script>
+<script src="gesture_collection_page.js"></script>
+</body>
+</html>

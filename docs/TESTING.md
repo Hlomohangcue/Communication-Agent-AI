@@ -1,68 +1,34 @@
 # Testing Guide
 
-## Test Stack
-- pytest
-- pytest-cov
-- httpx (for API test client support)
-- ruff (linting)
-- pip-audit (dependency vulnerability scan)
+## Runtime and dependencies
 
-## Environment Setup (Fresh Contributor)
-Create and activate a virtual environment before installing dependencies.
+Python 3.11 is used by the repository CI workflow and is recommended locally,
+especially for MediaPipe compatibility. Install `requirements.txt` and
+`requirements-dev.txt` in a virtual environment. Windows commands and complete
+setup are in [Installation and Setup](INSTALLATION_AND_SETUP.md).
 
-Windows PowerShell:
+## Automated checks
+
+From the repository root in PowerShell:
+
 ```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+.\.venv\Scripts\python.exe -m pytest -q
+node --test tests\*.test.js
+.\.venv\Scripts\python.exe -m compileall -q backend scripts
 ```
 
-Linux or macOS:
-```bash
-python -m venv .venv
-source .venv/bin/activate
+CI also runs Ruff and `pip-audit`. When installed locally:
+
+```powershell
+.\.venv\Scripts\ruff.exe check backend tests scripts
+.\.venv\Scripts\pip-audit.exe -r requirements.txt
 ```
 
-Install runtime dependencies:
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
+The automated suite includes Python unit/API tests and Node tests for frontend
+gesture-submission state. Vision landmark extraction is tested using mocked
+MediaPipe results; threshold-based dynamic tracking tests use synthetic
+observations. These tests do not establish physical webcam accuracy, browser
+compatibility, microphone behavior, model quality, or deployment readiness.
 
-Install development and test dependencies:
-```bash
-python -m pip install -r requirements-dev.txt
-python -m pip install ruff pip-audit
-```
-
-## Run Tests
-```bash
-python -m pytest
-```
-
-## Lint
-```bash
-python -m ruff check backend tests
-```
-
-## Compile Validation
-```bash
-python -m compileall backend
-```
-
-## Security Scan
-```bash
-python -m pip_audit -r requirements.txt
-```
-
-## Test Categories
-- Unit tests for agent and service logic.
-- API tests for key endpoint behavior.
-- Security and edge-case assertions.
-
-## Python Version Note
-The project is validated in CI with Python 3.11. For best compatibility, especially with MediaPipe, use Python 3.11 for local testing.
-
-## Coverage Goals
-- Core backend logic: >= 75%
-- Services and utilities: >= 80%
-- Endpoint sanity coverage for auth and root routes.
+No coverage targets are asserted here; consult the current CI configuration for
+the checks enforced by automation.

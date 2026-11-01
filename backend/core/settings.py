@@ -1,12 +1,13 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 
-def _load_dotenv_file() -> None:
+def _load_dotenv_file(env_path: Optional[Path] = None) -> None:
     """Load key=value pairs from the repository root .env if present."""
-    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if env_path is None:
+        env_path = Path(__file__).resolve().parents[2] / ".env"
     if not env_path.exists():
         return
 
@@ -15,7 +16,11 @@ def _load_dotenv_file() -> None:
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
         key, value = stripped.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip())
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        os.environ.setdefault(key, value)
 
 
 def _split_csv(value: str, default: List[str]) -> List[str]:
@@ -39,6 +44,33 @@ class AppSettings:
     port: int = int(os.getenv("PORT", "8000"))
 
     database_path: str = os.getenv("DATABASE_PATH", "data/communication_bridge.db")
+    gesture_dataset_path: str = os.getenv(
+        "GESTURE_DATASET_PATH", "data/gesture_dataset_v1.jsonl"
+    )
+    gesture_dataset_labels: List[str] = field(
+        default_factory=lambda: [
+            label.strip()
+            for label in os.getenv(
+                "GESTURE_DATASET_LABELS",
+                "open_palm,fist,thumbs_up,wave,unknown",
+            ).split(",")
+            if label.strip()
+        ]
+    )
+    gesture_dataset_dynamic_labels: List[str] = field(
+        default_factory=lambda: [
+            label.strip()
+            for label in os.getenv("GESTURE_DATASET_DYNAMIC_LABELS", "wave").split(",")
+            if label.strip()
+        ]
+    )
+    gesture_dataset_collector_ids: List[str] = field(
+        default_factory=lambda: [
+            user_id.strip()
+            for user_id in os.getenv("GESTURE_DATASET_COLLECTOR_IDS", "").split(",")
+            if user_id.strip()
+        ]
+    )
 
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")

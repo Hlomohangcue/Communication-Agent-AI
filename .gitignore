@@ -10,6 +10,9 @@ env/
 venv/
 ENV/
 *.db
+/data/gesture_dataset_v1.jsonl
+/data/gesture_dataset_v1.jsonl.lock
+/data/gesture_splits/
 .env
 .env.local
 .env.*.local
@@ -25,3 +28,6 @@ htmlcov/
 # Cloudflare Tunnel credentials
 *.cloudflared
 .cloudflared/
+
+# Python virtual environment
+.venv/

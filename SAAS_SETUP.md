@@ -1,5 +1,10 @@
 # SaaS Authentication & Freemium System
 
+> Historical setup notes: this document does not establish a deployed SaaS,
+> payment integration, subscription purchase flow, or current service status.
+> See [Current Features](docs/CURRENT_FEATURES.md) and
+> [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
+
 ## Overview
 Communication Bridge AI now includes a complete SaaS authentication system with freemium credits and subscription plans.
 

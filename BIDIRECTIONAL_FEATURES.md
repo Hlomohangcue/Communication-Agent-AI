@@ -1,5 +1,11 @@
 # Bidirectional Communication Features
 
+> Historical implementation note: this document is not a current capability or
+> validation report. Its ASL-inspired gesture/translation wording does not
+> establish ASL recognition or translation. The current system maps generic
+> gestures and emoji; see [Current Features](docs/CURRENT_FEATURES.md) and
+> [Limitations and Future Work](docs/LIMITATIONS_AND_FUTURE_WORK.md).
+
 ## 🎉 New Features Added!
 
 Your Communication Bridge AI system now supports **bidirectional communication** with ASL gestures, common phrases, and text-to-gesture translation!

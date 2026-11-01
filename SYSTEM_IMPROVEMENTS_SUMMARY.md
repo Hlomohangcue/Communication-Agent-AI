@@ -1,5 +1,10 @@
 # Communication Bridge AI - System Improvements Summary
 
+> Historical implementation summary: ASL-related wording below does not mean
+> the application provides validated ASL/SASL recognition or translation.
+> Current status is documented in [Current Features](docs/CURRENT_FEATURES.md)
+> and [Limitations and Future Work](docs/LIMITATIONS_AND_FUTURE_WORK.md).
+
 ## 🎉 Major Enhancements Completed
 
 Your Communication Bridge AI system has been significantly enhanced with bidirectional communication capabilities, ASL gestures, and text-to-gesture translation!

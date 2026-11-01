@@ -1,4 +1,5 @@
 import importlib
+import os
 import sys
 
 import pytest
@@ -49,3 +50,15 @@ def test_production_requires_jwt_secret(monkeypatch):
 
     with pytest.raises(RuntimeError, match="JWT_SECRET_KEY is required"):
         _import_settings_module()
+
+
+def test_dotenv_loader_removes_matching_outer_quotes(tmp_path, monkeypatch):
+    key = "COMMUNICATION_BRIDGE_DOTENV_TEST"
+    env_file = tmp_path / ".env"
+    env_file.write_text(f'{key}="8000"\n', encoding="utf-8")
+    monkeypatch.delenv(key, raising=False)
+
+    module = _import_settings_module()
+    module._load_dotenv_file(env_file)
+
+    assert os.environ[key] == "8000"

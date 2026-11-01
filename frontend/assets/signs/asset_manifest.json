@@ -1,0 +1,16 @@
+{
+  "vocabulary": [
+    { "id": "hello", "label": "Hello", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "good_morning", "label": "Good morning", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "thank_you", "label": "Thank you", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "please", "label": "Please", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "yes", "label": "Yes", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "no", "label": "No", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "help", "label": "Help", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "water", "label": "I need water", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "hungry", "label": "I am hungry", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "happy", "label": "I am happy", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "unwell", "label": "I am not feeling well", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." },
+    { "id": "goodbye", "label": "Goodbye", "media_type": "video", "source": "local-demo-only", "verification_status": "unverified-demo-only", "notes": "Placeholder asset slot for a reviewed SASL sign reference." }
+  ]
+}

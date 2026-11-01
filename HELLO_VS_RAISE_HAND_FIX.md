@@ -1,5 +1,9 @@
 # Hello/Hi vs Raise Hand Fix - Complete ✅
 
+> Historical implementation note; this is not a current end-to-end validation
+> report. Generic emoji/gesture mappings are not sign-language translation.
+> See [Current Features](docs/CURRENT_FEATURES.md).
+
 ## Issue Resolved
 Hello/Hi and Raise Hand now use different emojis and give different responses.
 

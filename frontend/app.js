@@ -236,8 +236,8 @@ const COMMON_PHRASES = [
     "Take your time"
 ];
 
-// ASL (American Sign Language) emoji mappings
-const ASL_MAPPINGS = {
+// Phrase and keyword mappings to emoji sequences; these are not sign-language translations.
+const TEXT_TO_EMOJI_MAPPINGS = {
     // Greetings
     'hello': '👋',
     'hi': '👋',
@@ -523,7 +523,41 @@ function addConversationMessage(type, message, metadata = {}) {
     item.className = 'conversation-item';
     item.style.opacity = '0';
     
-    if (type === 'student') {
+    if (type === 'student' && Array.isArray(metadata.gestureDetails)) {
+        const cards = metadata.gestureDetails.map(detail => {
+            const gestureName = typeof detail.gesture === 'string' ? detail.gesture : '';
+            const gestureInfo = window.getSupportedGestureIllustrations()
+                .find(item => item.gesture === gestureName);
+            const illustration = window.renderGestureIllustration(gestureName);
+            const hand = detail.hand ? `${escapeHtml(detail.hand)} hand` : 'Detected hand';
+            const meaningLabel = detail.meaning
+                ? detail.meaning.replace(/_/g, ' ')
+                : 'Meaning unavailable';
+            const meaningContext = detail.context_description;
+            const response = detail.suggested_response || 'No individual response available.';
+            return `
+                <article class="gesture-conversation-card">
+                    <div class="gesture-conversation-heading">
+                        ${illustration}
+                        <div>
+                            <strong>${escapeHtml(gestureInfo ? gestureInfo.label : gestureName)}</strong>
+                            <span>${hand}</span>
+                        </div>
+                    </div>
+                    <p><strong>Meaning:</strong> ${escapeHtml(meaningLabel)}${meaningContext ? ` — ${escapeHtml(meaningContext)}` : ''}</p>
+                    <p><strong>Response:</strong> ${escapeHtml(response)}</p>
+                </article>
+            `;
+        }).join('');
+        item.innerHTML = `
+            <div class="message-student">
+                <div class="message-bubble gesture-message-bubble">
+                    <div class="gesture-conversation-list">${cards}</div>
+                </div>
+            </div>
+            <div class="message-meta" style="text-align: right;">Hand-gesture input • ${new Date().toLocaleTimeString()}</div>
+        `;
+    } else if (type === 'student') {
         // Check if this is a gesture message (contains emojis or is from translation)
         const isGestureMessage = metadata.originalText || /[\u{1F300}-\u{1F9FF}]/u.test(message);
         
@@ -534,7 +568,7 @@ function addConversationMessage(type, message, metadata = {}) {
             // This is a translated gesture from verbal user
             metaInfo += ` • Translated from: "${metadata.originalText}"`;
         }
-        
+
         item.innerHTML = `
             <div class="message-student">
                 <div class="message-bubble">${displayMessage}</div>
@@ -571,6 +605,16 @@ function addConversationMessage(type, message, metadata = {}) {
     }, 100);
     
     console.log('=== MESSAGE ADDED SUCCESSFULLY ===');
+}
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[character]);
 }
 
 async function loadConversationHistory(sessionId) {
@@ -611,18 +655,17 @@ async function loadConversationHistory(sessionId) {
             messages.forEach(msg => {
                 // Check if this is a verbal-to-nonverbal message
                 if (msg.intent === 'verbal_to_nonverbal_translation') {
-                    // This is a teacher→student message with ASL translation
-                    // input_text contains "[Teacher] ..." and output_text contains "[ASL] ..."
+                    // This is a teacher→student message with an emoji sequence.
                     const teacherText = msg.input_text.replace('[Teacher] ', '');
-                    const aslText = msg.output_text.replace('[ASL] ', '');
-                    
-                    console.log('Loading verbal→nonverbal message:', { teacherText, aslText });
+                    const emojiSequence = msg.output_text.replace(/^\[(?:Emoji|ASL)\]\s*/, '');
+
+                    console.log('Loading verbal→nonverbal message:', { teacherText, emojiSequence });
                     
                     // Add teacher message first
                     addConversationMessage('teacher', teacherText);
                     
-                    // Add ASL translation as student message
-                    addConversationMessage('student', aslText, {
+                    // Older conversation rows used the [ASL] marker for emoji sequences.
+                    addConversationMessage('student', emojiSequence, {
                         originalText: teacherText
                     });
                 } else {
@@ -932,7 +975,10 @@ function clearCurrentInput() {
 
 async function checkStatus() {
     try {
-        const response = await fetch(`${API_BASE}/`);
+        const response = await fetch(`${API_BASE}/health`);
+        if (!response.ok) {
+            throw new Error(`Health check failed with HTTP ${response.status}`);
+        }
         const data = await response.json();
         document.getElementById('status-text').textContent = 'Connected';
         document.getElementById('status-indicator').style.background = '#48bb78';
@@ -1099,19 +1145,16 @@ async function sendMessage() {
         console.log('Sending message to API:', input);
         
         if (currentMode === 'verbal-to-nonverbal') {
-            // Verbal to Non-Verbal Mode: Translate to ASL
-            console.log('Translating to ASL...');
+            // Verbal to Non-Verbal Mode: map the message to an emoji sequence.
+            console.log('Mapping text to emoji sequence...');
             
-            // Translate to ASL
-            const aslTranslation = translateToASL(input);
-            console.log('ASL Translation:', aslTranslation);
+            const emojiSequence = mapTextToEmojis(input);
+            console.log('Emoji sequence:', emojiSequence);
             
-            // Save to database by sending to backend
-            // We'll send the teacher's text as input and ASL as the "response"
             const requestBody = {
                 session_id: currentSessionId,
                 input_text: `[Teacher] ${input}`,  // Mark it as from teacher
-                output_text: `[ASL] ${aslTranslation}`,  // Mark as ASL translation
+                output_text: `[Emoji] ${emojiSequence}`,
                 intent: 'verbal_to_nonverbal_translation',
                 confidence: 1.0
             };
@@ -1140,15 +1183,14 @@ async function sendMessage() {
             addConversationMessage('teacher', input);
             addWorkflowItem('Teacher', `Said: "${input.substring(0, 30)}${input.length > 30 ? '...' : ''}"`);
             
-            // Add ASL translation as student message
-            addConversationMessage('student', aslTranslation, {
+            addConversationMessage('student', emojiSequence, {
                 originalText: input
             });
             
-            addWorkflowItem('AI System', 'Translated to ASL gestures');
-            addWorkflowItem('Non-Verbal Student', `Received: ${aslTranslation}`);
+            addWorkflowItem('AI System', 'Mapped text to an emoji sequence');
+            addWorkflowItem('Non-Verbal Student', `Received: ${emojiSequence}`);
             
-            showNotification('Message translated to ASL and saved!', 'success');
+            showNotification('Message mapped to emojis and saved!', 'success');
             
         } else {
             // Non-Verbal to Verbal Mode: Original behavior
@@ -1168,7 +1210,7 @@ async function sendMessage() {
                     const gestureData = await gestureResponse.json();
                     if (gestureData.success && gestureData.gesture_sequence) {
                         gestureEmojis = gestureData.gesture_sequence;
-                        console.log('Text translated to gestures:', gestureEmojis);
+                        console.log('Text mapped to emoji sequence:', gestureEmojis);
                     }
                 }
             } catch (gestureError) {
@@ -1183,7 +1225,7 @@ async function sendMessage() {
             // Show student input in workflow
             addWorkflowItem('Student', `Sent: "${input.substring(0, 30)}${input.length > 30 ? '...' : ''}"`);
             if (gestureEmojis) {
-                addWorkflowItem('AI System', `Translated to gestures: ${gestureEmojis}`);
+                addWorkflowItem('AI System', `Emoji sequence: ${gestureEmojis}`);
             }            
             const requestBody = {
                 session_id: currentSessionId,
@@ -1394,6 +1436,19 @@ async function loadGestures() {
     }
 }
 
+function renderSupportedGestureLibrary() {
+    const container = document.getElementById('supported-gesture-grid');
+    if (!container) return;
+
+    container.innerHTML = window.getSupportedGestureIllustrations().map(item => `
+        <article class="supported-gesture-card">
+            ${window.renderGestureIllustration(item.gesture)}
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(item.meaning)}</span>
+        </article>
+    `).join('');
+}
+
 async function loadPhrases() {
     try {
         const response = await fetch(`${API_BASE}/phrases`);
@@ -1452,7 +1507,7 @@ function setupModeSwitching() {
                         renderCommonPhrases();
                     }
                     
-                    showNotification('Switched to Verbal → Non-Verbal mode. Output will be translated to ASL gestures.', 'info');
+                    showNotification('Switched to Verbal → Non-Verbal mode. Output will be represented as an emoji sequence.', 'info');
                 } else {
                     // Non-Verbal to Verbal Mode
                     if (simulationTitle) simulationTitle.textContent = 'Non-Verbal to Verbal Communication';
@@ -1501,14 +1556,13 @@ function renderCommonPhrases() {
     });
 }
 
-function translateToASL(text) {
+function mapTextToEmojis(text) {
     if (!text || !text.trim()) return '';
     
     const lowerText = text.toLowerCase();
-    let aslOutput = [];
+    let emojiOutput = [];
     
-    // Try to match phrases first (longer matches first)
-    const sortedPhrases = Object.keys(ASL_MAPPINGS).sort((a, b) => b.length - a.length);
+    const sortedPhrases = Object.keys(TEXT_TO_EMOJI_MAPPINGS).sort((a, b) => b.length - a.length);
     
     let remainingText = lowerText;
     let matched = true;
@@ -1519,7 +1573,7 @@ function translateToASL(text) {
         
         for (const phrase of sortedPhrases) {
             if (remainingText.startsWith(phrase)) {
-                aslOutput.push(ASL_MAPPINGS[phrase]);
+                emojiOutput.push(TEXT_TO_EMOJI_MAPPINGS[phrase]);
                 remainingText = remainingText.substring(phrase.length);
                 matched = true;
                 break;
@@ -1539,8 +1593,8 @@ function translateToASL(text) {
     }
     
     // If we got some translations, return them
-    if (aslOutput.length > 0) {
-        return aslOutput.join(' ');
+    if (emojiOutput.length > 0) {
+        return emojiOutput.join(' ');
     }
     
     // Fallback: try word by word
@@ -1549,12 +1603,12 @@ function translateToASL(text) {
     
     for (const word of words) {
         const cleanWord = word.replace(/[.,!?;:]/g, '');
-        if (ASL_MAPPINGS[cleanWord]) {
-            translations.push(ASL_MAPPINGS[cleanWord]);
+        if (TEXT_TO_EMOJI_MAPPINGS[cleanWord]) {
+            translations.push(TEXT_TO_EMOJI_MAPPINGS[cleanWord]);
         }
     }
     
-    return translations.length > 0 ? translations.join(' ') : '🤷 (No direct ASL translation available)';
+    return translations.length > 0 ? translations.join(' ') : '🤷 (No direct emoji mapping available)';
 }
 
 function renderGesturePalette() {
@@ -1730,7 +1784,7 @@ async function sendVerbalMessage(text) {
         
         // Add verbal user's text message to conversation history (as teacher/verbal user)
         addConversationMessage('teacher', text, {
-            method: `Translated to: ${data.gesture_sequence}`
+            method: `Emoji sequence: ${data.gesture_sequence}`
         });
         
         // Add gesture translation as non-verbal user's view (as student)
@@ -1742,7 +1796,7 @@ async function sendVerbalMessage(text) {
         // Clear input
         document.getElementById('verbal-input').value = '';
         
-        showNotification('Message translated and sent!', 'success');
+        showNotification('Message represented with emojis and sent!', 'success');
     } catch (error) {
         console.error('Error sending verbal message:', error);
         showNotification('Failed to translate message', 'error');
@@ -1753,6 +1807,7 @@ async function sendVerbalMessage(text) {
 window.addEventListener('DOMContentLoaded', async () => {
     // Setup mode switching
     setupModeSwitching();
+    renderSupportedGestureLibrary();
     
     // Render common phrases (hidden by default)
     renderCommonPhrases();
@@ -1763,22 +1818,60 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // Webcam variables
 let webcamStream = null;
+let webcamStartInProgress = false;
+let webcamStartGeneration = 0;
 let isCapturing = false;
 let captureInterval = null;
-let isFrameProcessing = false;
+let frameSequence = 0;
+let detectionLoopSequence = 0;
+let cameraTrackingSessionId = null;
+
+function logGestureDiagnostic(event, details = {}) {
+    const monotonicTime = window.performance && typeof window.performance.now === 'function'
+        ? window.performance.now()
+        : null;
+    console.info('[gesture-diagnostic]', {
+        event,
+        timestamp: new Date().toISOString(),
+        monotonic_ms: monotonicTime,
+        ...details,
+    });
+}
 
 // Start webcam
 async function startWebcam() {
+    if (webcamStartInProgress || webcamStream) {
+        logGestureDiagnostic('webcam-start-ignored', {
+            reason: webcamStartInProgress ? 'permission-request-in-progress' : 'webcam-already-started',
+        });
+        return;
+    }
+
+    webcamStartInProgress = true;
+    const startGeneration = ++webcamStartGeneration;
+    logGestureDiagnostic('webcam-start-requested', { startGeneration });
+
     try {
         const video = document.getElementById('webcam');
         
         // Request webcam access
-        webcamStream = await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
             video: {
                 width: { ideal: 640 },
                 height: { ideal: 480 }
             }
         });
+
+        if (startGeneration !== webcamStartGeneration) {
+            stream.getTracks().forEach(track => track.stop());
+            logGestureDiagnostic('webcam-start-result-ignored', {
+                reason: 'stale-webcam-start',
+                startGeneration,
+            });
+            return;
+        }
+
+        webcamStream = stream;
         
         video.srcObject = webcamStream;
         
@@ -1793,18 +1886,26 @@ async function startWebcam() {
         console.log('Webcam started');
     } catch (error) {
         console.error('Error accessing webcam:', error);
+        logGestureDiagnostic('webcam-start-failed', { startGeneration });
         alert('Could not access webcam. Please check permissions.');
+    } finally {
+        if (startGeneration === webcamStartGeneration) {
+            webcamStartInProgress = false;
+        }
     }
 }
 
 // Stop webcam
 function stopWebcam() {
+    webcamStartGeneration += 1;
+    webcamStartInProgress = false;
     if (webcamStream) {
         webcamStream.getTracks().forEach(track => track.stop());
         webcamStream = null;
     }
     
     stopGestureDetection();
+    cameraTrackingSessionId = null;
     
     const video = document.getElementById('webcam');
     video.srcObject = null;
@@ -1820,49 +1921,167 @@ function stopWebcam() {
 
 // Start automatic gesture detection
 function startGestureDetection() {
-    isCapturing = true;
-    gestureSubmissionState.startDetection();
+    if (gestureSubmissionState.detectionActive) {
+        logGestureDiagnostic('detection-loop-start-ignored', {
+            reason: 'detection-already-active',
+            generation: gestureSubmissionState.generation,
+        });
+        return;
+    }
 
-    // Capture and process frames every 500ms
+    const previousGesture = gestureSubmissionState.lastStableGestureKey;
+    const generation = gestureSubmissionState.startDetection();
+    cameraTrackingSessionId = window.crypto && typeof window.crypto.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    isCapturing = true;
+    const loopId = ++detectionLoopSequence;
     captureInterval = setInterval(() => {
         if (isCapturing) {
-            processCurrentFrame();
+            processCurrentFrame('automatic', loopId);
         }
     }, 500);
+    logGestureDiagnostic('detection-loop-started', {
+        loopId,
+        generation,
+        intervalMs: 500,
+        lastStableGestureBeforeSessionStart: previousGesture,
+    });
 }
 
 // Stop gesture detection
 function stopGestureDetection() {
+    const previousLoopId = detectionLoopSequence;
+    const previousGesture = gestureSubmissionState.lastStableGestureKey;
     isCapturing = false;
-    gestureSubmissionState.stopDetection();
+    const generation = gestureSubmissionState.stopDetection();
     if (captureInterval) {
         clearInterval(captureInterval);
         captureInterval = null;
     }
+    logGestureDiagnostic('detection-loop-stopped', {
+        loopId: previousLoopId,
+        generation,
+        lastStableGestureBeforeSessionStop: previousGesture,
+    });
 }
 
 // Process current webcam frame
-async function processCurrentFrame() {
+async function processCurrentFrame(source = 'automatic', loopId = null) {
+    const frameId = ++frameSequence;
     const requestGeneration = gestureSubmissionState.generation;
-    if (isFrameProcessing || !isCapturing) {
+    if (!isCapturing) {
+        logGestureDiagnostic('frame-ignored', {
+            frameId,
+            source,
+            loopId,
+            generation: requestGeneration,
+            reason: 'detection-inactive',
+        });
         return;
     }
 
-    isFrameProcessing = true;
+    if (!gestureSubmissionState.beginFrameRequest(requestGeneration)) {
+        logGestureDiagnostic('frame-ignored', {
+            frameId,
+            source,
+            loopId,
+            generation: requestGeneration,
+            reason: 'frame-request-already-in-progress',
+        });
+        return;
+    }
+
+    const requestStartedAt = window.performance.now();
+    let requestOutcome = 'failed';
+    logGestureDiagnostic('frame-request-started', {
+        frameId,
+        source,
+        loopId,
+        generation: requestGeneration,
+    });
+
     try {
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('canvas');
+        if (!canvas || !window.isVideoFrameReady(video)) {
+            gestureSubmissionState.resetStability();
+            requestOutcome = 'invalid-frame';
+            logGestureDiagnostic('invalid-frame', {
+                frameId,
+                source,
+                loopId,
+                generation: requestGeneration,
+                readyState: video && video.readyState,
+                videoWidth: video && video.videoWidth,
+                videoHeight: video && video.videoHeight,
+                lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+                lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+                reason: !canvas ? 'canvas-unavailable' : 'video-not-ready-or-zero-dimensions',
+            });
+            return;
+        }
+
         const context = canvas.getContext('2d');
+        if (!context) {
+            gestureSubmissionState.resetStability();
+            requestOutcome = 'invalid-frame';
+            logGestureDiagnostic('invalid-frame', {
+                frameId,
+                source,
+                loopId,
+                generation: requestGeneration,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+                lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+                reason: 'canvas-context-unavailable',
+            });
+            return;
+        }
         
         // Set canvas size to match video
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+        if (canvas.width <= 0 || canvas.height <= 0) {
+            gestureSubmissionState.resetStability();
+            requestOutcome = 'invalid-frame';
+            logGestureDiagnostic('invalid-frame', {
+                frameId,
+                source,
+                loopId,
+                generation: requestGeneration,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+                lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+                reason: 'zero-sized-canvas',
+            });
+            return;
+        }
         
         // Draw current frame to canvas
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frameTimestampMs = window.performance.now();
         
         // Convert to base64
         const frameData = canvas.toDataURL('image/jpeg', 0.8);
+        if (!window.isFrameDataValid(frameData)) {
+            gestureSubmissionState.resetStability();
+            requestOutcome = 'invalid-frame';
+            logGestureDiagnostic('invalid-frame', {
+                frameId,
+                source,
+                loopId,
+                generation: requestGeneration,
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+                lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+                reason: 'empty-or-invalid-captured-image',
+            });
+            return;
+        }
         
         // Send to backend for processing
         const response = await fetch(`${API_BASE}/vision/process-frame`, {
@@ -1870,11 +2089,22 @@ async function processCurrentFrame() {
             headers: getAuthHeaders(),
             body: JSON.stringify({
                 frame: frameData,
-                session_id: currentSessionId
+                session_id: currentSessionId,
+                detection_session_id: cameraTrackingSessionId,
+                frame_timestamp_ms: frameTimestampMs,
             })
         });
 
         if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+            requestOutcome = 'stale';
+            logGestureDiagnostic('stale-response', {
+                frameId,
+                source,
+                loopId,
+                generation: requestGeneration,
+                currentGeneration: gestureSubmissionState.generation,
+                reason: 'stale-detection-generation',
+            });
             return;
         }
 
@@ -1884,38 +2114,110 @@ async function processCurrentFrame() {
 
         const result = await response.json();
 
-        if (!isCapturing) {
+        if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
+            requestOutcome = 'stale';
+            logGestureDiagnostic('stale-response', {
+                frameId,
+                source,
+                loopId,
+                generation: requestGeneration,
+                currentGeneration: gestureSubmissionState.generation,
+                reason: 'stale-detection-generation',
+            });
             return;
         }
 
-        gestureSubmissionState.handleFrameResult(
+        const handled = gestureSubmissionState.handleFrameResult(
             requestGeneration,
             result,
-            (currentResult) => updateGestureDisplay(currentResult, requestGeneration)
+            (currentResult) => updateGestureDisplay(currentResult, requestGeneration, frameId, source, loopId)
         );
+        requestOutcome = handled ? 'processed' : 'stale';
     } catch (error) {
         console.error('Error processing frame:', error);
+        requestOutcome = 'failed';
+        logGestureDiagnostic('request-error', {
+            frameId,
+            source,
+            loopId,
+            generation: requestGeneration,
+            currentGeneration: gestureSubmissionState.generation,
+            lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+            lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+            reason: 'frame-request-error',
+        });
         if (gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
             gestureSubmissionState.resetStability();
         }
     } finally {
-        isFrameProcessing = false;
+        logGestureDiagnostic('frame-request-completed', {
+            frameId,
+            source,
+            loopId,
+            generation: requestGeneration,
+            currentGeneration: gestureSubmissionState.generation,
+            outcome: requestOutcome,
+            durationMs: window.performance.now() - requestStartedAt,
+        });
+        gestureSubmissionState.finishFrameRequest(requestGeneration);
     }
 }
 
 // Update gesture display and populate input field
-function updateGestureDisplay(result, requestGeneration) {
+function updateGestureDisplay(result, requestGeneration, frameId, source, loopId) {
     const overlay = document.getElementById('detectedGesture');
 
     if (result && result.error) {
         overlay.innerHTML = `<div style="color: #f56565;">⚠️ ${result.error}</div>`;
         gestureSubmissionState.resetStability();
+        const errorEvent = result.error_type === 'invalid_frame'
+            ? 'invalid-frame'
+            : 'request-error';
+        console.table([{
+            event: errorEvent,
+            timestamp: new Date().toISOString(),
+            monotonic_ms: window.performance.now(),
+            frameId,
+            source,
+            loopId,
+            generation: requestGeneration,
+            handsDetected: result.hands_detected,
+            gestures: '[]',
+            lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+            lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+            decision: errorEvent,
+            errorType: result.error_type || 'unknown',
+        }]);
         return;
     }
 
     const decision = gestureSubmissionState.observe(result);
-    if (decision.neutral) {
-        overlay.textContent = 'No gestures detected';
+    const gestureDiagnosticDetails = window.getGestureDiagnosticDetails(result);
+    console.table([{
+        event: decision.noHand
+            ? 'no-hand-detection'
+            : decision.reason === 'invalid-frame'
+                ? 'invalid-frame'
+                : decision.accepted
+                    ? 'gesture-transition'
+                    : decision.reason,
+        timestamp: new Date().toISOString(),
+        monotonic_ms: window.performance.now(),
+        frameId,
+        source,
+        loopId,
+        generation: requestGeneration,
+        ...gestureDiagnosticDetails,
+        gestures: JSON.stringify(gestureDiagnosticDetails.detectedHands),
+        lastStableGesture: gestureSubmissionState.lastStableGestureKey,
+        lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+        inFlightGesture: gestureSubmissionState.inFlightGestureKey,
+        pendingGestureCount: gestureSubmissionState.pendingSubmissions.length,
+        decision: decision.reason,
+    }]);
+
+    if (decision.noHand) {
+        overlay.textContent = 'No hand detected';
         return;
     }
 
@@ -1924,16 +2226,25 @@ function updateGestureDisplay(result, requestGeneration) {
         return;
     }
 
-    const gestureText = result.gestures.map(g =>
-        `${g.gesture} (${(g.confidence * 100).toFixed(0)}%)`
-    ).join(', ');
-
-    const emojiText = Array.isArray(result.emojis) ? result.emojis.join(' ') : '';
-
-    overlay.innerHTML = `
-        <div>👋 Detected: ${gestureText}</div>
-        <div>📝 Emojis: ${emojiText}</div>
-    `;
+    const supportedGestures = window.getSupportedGestureIllustrations();
+    const handCards = result.gestures.map(detected => {
+        const info = supportedGestures.find(item => item.gesture === detected.gesture);
+        const illustration = window.renderGestureIllustration(detected.gesture);
+        const label = info ? info.label : detected.gesture;
+        const hand = detected.hand ? `${escapeHtml(detected.hand)} hand` : 'Detected hand';
+        const confidence = Number.isFinite(detected.confidence)
+            ? `${(detected.confidence * 100).toFixed(0)}% confidence`
+            : '';
+        return `
+            <article class="gesture-live-card">
+                ${illustration}
+                <strong>${escapeHtml(label)}</strong>
+                <span>${hand}</span>
+                <small>${confidence}</small>
+            </article>
+        `;
+    }).join('');
+    overlay.innerHTML = `<div class="gesture-live-grid">${handCards}</div>`;
 
     if (!decision.accepted || currentMode !== 'nonverbal-to-verbal') {
         return;
@@ -1941,29 +2252,63 @@ function updateGestureDisplay(result, requestGeneration) {
 
     const studentInput = document.getElementById('student-input');
     if (studentInput) {
-        interpretGestureAndRespond(result, decision.gestureNames, emojiText, studentInput, requestGeneration);
+        interpretGestureAndRespond(
+            result,
+            decision.gestureNames,
+            studentInput,
+            requestGeneration,
+            {
+                frameId,
+                source,
+                loopId,
+                transitionId: decision.transitionId,
+                transitionKey: decision.gestureNames.join(','),
+            }
+        );
     }
 }
 
-async function interpretGestureAndRespond(visionResult, gestureNames, emojiText, studentInput, requestGeneration) {
+async function interpretGestureAndRespond(visionResult, gestureNames, studentInput, requestGeneration, frameInfo = {}) {
     if (
         isProcessing ||
         !isCapturing ||
         !gestureSubmissionState.isCurrentGeneration(requestGeneration)
     ) {
+        logGestureDiagnostic('gesture-submission-ignored', {
+            ...frameInfo,
+            generation: requestGeneration,
+            currentGeneration: gestureSubmissionState.generation,
+            reason: isProcessing
+                ? 'another-message-processing'
+                : !isCapturing
+                    ? 'detection-inactive'
+                    : 'stale-detection-generation',
+        });
         return;
     }
 
+    logGestureDiagnostic('gesture-submission-attempted', {
+        ...frameInfo,
+        generation: requestGeneration,
+        gestures: gestureNames,
+        ...window.getGestureDiagnosticDetails(visionResult),
+        transitionKey: frameInfo.transitionKey || gestureNames.join(','),
+        lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+    });
+    let responseStatus = null;
     try {
-        await gestureSubmissionState.submit(gestureNames, async () => {
+        const submitted = await gestureSubmissionState.submit(gestureNames, async () => {
             const currentText = studentInput.value.trim();
-            studentInput.value = currentText ? `${currentText} ${emojiText}` : emojiText;
+            const readableGestureNames = gestureNames.join(', ');
+            studentInput.value = currentText
+                ? `${currentText} ${readableGestureNames}`
+                : readableGestureNames;
             studentInput.style.backgroundColor = '#e6ffed';
             setTimeout(() => {
                 studentInput.style.backgroundColor = '';
             }, 300);
 
-            console.log('✅ Gesture accepted and queued:', emojiText);
+            console.log('Gesture accepted and queued:', gestureNames);
 
             const response = await fetch(`${API_BASE}/vision/interpret-gesture`, {
                 method: 'POST',
@@ -1974,9 +2319,16 @@ async function interpretGestureAndRespond(visionResult, gestureNames, emojiText,
                     gestures: visionResult.gestures
                 })
             });
+            responseStatus = response.status;
 
             if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
-                return;
+                logGestureDiagnostic('gesture-submission-response-ignored', {
+                    ...frameInfo,
+                    generation: requestGeneration,
+                    currentGeneration: gestureSubmissionState.generation,
+                    reason: 'stale-detection-generation',
+                }, requestGeneration);
+                return false;
             }
 
             if (!response.ok) {
@@ -1986,10 +2338,21 @@ async function interpretGestureAndRespond(visionResult, gestureNames, emojiText,
             const result = await response.json();
 
             if (!isCapturing || !gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
-                return;
+                logGestureDiagnostic('gesture-submission-response-ignored', {
+                    ...frameInfo,
+                    generation: requestGeneration,
+                    currentGeneration: gestureSubmissionState.generation,
+                    reason: 'stale-detection-generation',
+                });
+                return false;
             }
 
             if (result.success && result.interpretation) {
+                logGestureDiagnostic('gesture-submission-response-accepted', {
+                    ...frameInfo,
+                    generation: requestGeneration,
+                    httpStatus: response.status,
+                });
                 const interp = result.interpretation;
                 showNotification(
                     `Gesture Meaning: ${interp.message}\n\nResponse: ${interp.response}`,
@@ -1997,8 +2360,20 @@ async function interpretGestureAndRespond(visionResult, gestureNames, emojiText,
                 );
 
                 if (interp.understood) {
-                    const detectedGestureNames = (result.detected_gestures || []).map(g => g.gesture).join(', ');
-                    addConversationMessage('student', `[Gesture: ${detectedGestureNames}] ${(result.emojis || []).join(' ')}`);
+                    const detectedGestures = result.detected_gestures || [];
+                    const detectedGestureNames = detectedGestures.map(g => g.gesture).join(', ');
+                    const gestureDetails = interp.gesture_details || detectedGestures.map(detected => {
+                        const info = window.getSupportedGestureIllustrations()
+                            .find(item => item.gesture === detected.gesture);
+                        return {
+                            ...detected,
+                            context_description: info ? info.meaning : 'Meaning unavailable',
+                            suggested_response: interp.response,
+                        };
+                    });
+                    addConversationMessage('student', `[Gesture: ${detectedGestureNames}]`, {
+                        gestureDetails,
+                    });
                     addConversationMessage('teacher', interp.response, {
                         intent: 'gesture_interpretation',
                         method: 'auto-response'
@@ -2006,12 +2381,35 @@ async function interpretGestureAndRespond(visionResult, gestureNames, emojiText,
                 }
 
                 console.log('✅ Gesture interpreted:', interp);
+                return true;
             } else {
+                logGestureDiagnostic('gesture-submission-response-rejected', {
+                    ...frameInfo,
+                    generation: requestGeneration,
+                    httpStatus: response.status,
+                    reason: 'interpretation-not-successful',
+                });
                 showNotification(result.message || 'The gesture could not be interpreted.', 'warning');
+                return false;
             }
-        });
+        }, requestGeneration, frameInfo.transitionId);
+        if (!submitted) {
+            logGestureDiagnostic('gesture-submission-rejected', {
+                ...frameInfo,
+                generation: requestGeneration,
+                lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+                reason: 'stale-or-duplicate-transition',
+            });
+        }
     } catch (error) {
         console.error('Error interpreting gesture:', error);
+        logGestureDiagnostic('gesture-submission-failed', {
+            ...frameInfo,
+            generation: requestGeneration,
+            lastSuccessfullySubmittedGesture: gestureSubmissionState.lastSuccessfullySubmittedGestureKey,
+            httpStatus: responseStatus,
+            reason: 'request-error',
+        });
         if (isCapturing && gestureSubmissionState.isCurrentGeneration(requestGeneration)) {
             showNotification('Failed to interpret gesture. Release and repeat it to try again.', 'error');
         }
@@ -2020,7 +2418,7 @@ async function interpretGestureAndRespond(visionResult, gestureNames, emojiText,
 
 // Manually sample a frame; interpretation still uses the shared stability guard.
 async function captureGesture() {
-    await processCurrentFrame();
+    await processCurrentFrame('manual');
 }
 
 // Clear gesture input

@@ -1191,3 +1191,142 @@ header h1 {
 .gesture-info p {
     margin: 5px 0;
 }
+
+.gesture-info {
+    margin-top: 15px;
+    padding: 16px;
+    background: #f8fafc;
+    border: 1px solid #dfe7ef;
+    border-radius: 12px;
+    text-align: left;
+}
+
+.gesture-info h4 {
+    margin: 0 0 12px;
+    color: #23364d;
+    font-size: 16px;
+}
+
+.supported-gesture-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+    gap: 10px;
+}
+
+.supported-gesture-card,
+.gesture-live-card {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
+    color: #34445a;
+    background: #fff;
+    border: 1px solid #e1e8f0;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.supported-gesture-card strong,
+.gesture-live-card strong {
+    color: #24364b;
+    font-size: 13px;
+}
+
+.supported-gesture-card span,
+.gesture-live-card span,
+.gesture-live-card small {
+    color: #66758a;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.gesture-illustration {
+    display: block;
+    width: 58px;
+    height: 58px;
+    flex: 0 0 auto;
+}
+
+.gesture-live-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.gesture-live-card {
+    width: 118px;
+    padding: 7px;
+    background: rgba(255, 255, 255, 0.96);
+}
+
+.gesture-live-card .gesture-illustration {
+    width: 54px;
+    height: 54px;
+}
+
+.gesture-disclaimer {
+    margin: 12px 0 0 !important;
+    color: #58677a;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.gesture-message-bubble {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.gesture-conversation-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+.gesture-conversation-card {
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #dce5ef;
+    border-radius: 10px;
+}
+
+.gesture-conversation-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.gesture-conversation-heading .gesture-illustration {
+    width: 48px;
+    height: 48px;
+}
+
+.gesture-conversation-heading strong,
+.gesture-conversation-heading span {
+    display: block;
+}
+
+.gesture-conversation-heading strong {
+    color: #24364b;
+}
+
+.gesture-conversation-heading span,
+.gesture-conversation-card p {
+    color: #58677a;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.gesture-conversation-card p {
+    margin: 5px 0 0;
+}
+
+@media (max-width: 640px) {
+    .supported-gesture-grid,
+    .gesture-conversation-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

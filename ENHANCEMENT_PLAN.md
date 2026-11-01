@@ -1,5 +1,9 @@
 # Communication Bridge AI - Enhancement Plan
 
+> Proposal only: features listed here are not implied to be implemented or
+> validated. In particular, ASL-related proposals do not describe current
+> sign-language recognition. See [Current Features](docs/CURRENT_FEATURES.md).
+
 ## 🎯 New Features Overview
 
 ### 1. American Sign Language (ASL) Integration

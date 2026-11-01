@@ -1,5 +1,9 @@
 # Quick Start - Bidirectional Communication
 
+> Historical quick-start note: use [Installation and Setup](docs/INSTALLATION_AND_SETUP.md)
+> for current Windows commands and dashboard access. This file's ASL/translation
+> wording is not a claim of validated sign-language functionality.
+
 ## 🚀 Get Started in 3 Minutes!
 
 ### Step 1: Start the Backend

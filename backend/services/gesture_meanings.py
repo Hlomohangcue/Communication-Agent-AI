@@ -64,7 +64,7 @@ class GestureMeaningService:
             "i_love_you": {
                 "primary": "love",
                 "meanings": ["I love you", "love", "care", "affection", "ILY"],
-                "context": "expressing love or affection (ASL sign)"
+                "context": "expressing love or affection"
             },
             "call_me": {
                 "primary": "contact",
@@ -154,10 +154,9 @@ class GestureMeaningService:
                 "Stopping as requested."
             ],
             "power": [
-                "I see your gesture. What would you like to communicate?",
-                "Understood. How can I assist you?",
-                "Got it. What do you need?",
-                "I'm listening. Please continue."
+                "A fist can express strength or solidarity, and it can also mean stop. Which meaning fits for you?",
+                "I see a fist gesture. Are you showing strength or solidarity, or asking me to stop?",
+                "A fist may signal strength, solidarity, or stop. Please let me know which you mean."
             ],
             "peace": [
                 "Peace to you too!",
@@ -317,7 +316,8 @@ class GestureMeaningService:
                 "gestures": gestures,
                 "message": primary_interp["interpretation"],
                 "response": primary_interp["suggested_response"],
-                "meanings": primary_interp.get("possible_meanings", [])
+                "meanings": primary_interp.get("possible_meanings", []),
+                "gesture_details": interpretations,
             }
         else:
             # Multiple gestures - combine meanings
@@ -329,7 +329,8 @@ class GestureMeaningService:
                 "gestures": gestures,
                 "message": combined_message,
                 "response": "I see you're communicating multiple things. Could you clarify what you need?",
-                "meanings": all_meanings
+                "meanings": all_meanings,
+                "gesture_details": interpretations,
             }
     
     def get_gesture_info(self, gesture_name: str) -> Dict[str, Any]:

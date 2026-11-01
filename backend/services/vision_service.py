@@ -2,7 +2,11 @@ import cv2
 import numpy as np
 from typing import Dict, Any, Optional, List
 import base64
+import binascii
 import logging
+from datetime import datetime, timezone
+
+from .dynamic_gesture_tracker import DynamicGestureTracker
 
 
 logger = logging.getLogger(__name__)
@@ -15,6 +19,7 @@ class VisionService:
     """
     
     def __init__(self):
+        self.dynamic_gesture_tracker = DynamicGestureTracker()
         try:
             import mediapipe as mp
             
@@ -68,7 +73,12 @@ class VisionService:
             "clap": "👏"  # Clapping - two open palms
         }
     
-    def process_frame(self, frame_data: str) -> Dict[str, Any]:
+    def process_frame(
+        self,
+        frame_data: str,
+        tracking_session_id: Optional[str] = None,
+        timestamp_ms: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """
         Process a single frame from webcam
         
@@ -81,16 +91,21 @@ class VisionService:
         if not self.mediapipe_available:
             return {
                 "error": "MediaPipe not installed",
-                "hands_detected": 0,
-                "gestures": [],
-                "emojis": [],
-                "confidence": 0.0
+                "error_type": "vision_unavailable",
             }
         
         try:
-            # Decode base64 image
             image = self._decode_image(frame_data)
-            
+        except (ValueError, cv2.error) as e:
+            logger.warning("Rejected invalid vision frame: %s", e)
+            if tracking_session_id:
+                self.dynamic_gesture_tracker.reset_movement_history(tracking_session_id)
+            return {
+                "error": f"Invalid frame: {e}",
+                "error_type": "invalid_frame",
+            }
+
+        try:
             # Convert BGR to RGB
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             
@@ -98,6 +113,12 @@ class VisionService:
             results = self.hands.process(image_rgb)
             
             if not results.multi_hand_landmarks:
+                if tracking_session_id and timestamp_ms is not None:
+                    self.dynamic_gesture_tracker.update(
+                        tracking_session_id,
+                        timestamp_ms,
+                        [],
+                    )
                 return {
                     "hands_detected": 0,
                     "gestures": [],
@@ -108,7 +129,8 @@ class VisionService:
             # Detect gestures from landmarks
             gestures = []
             emojis = []
-            
+            tracked_hands = []
+
             for hand_landmarks, handedness in zip(
                 results.multi_hand_landmarks,
                 results.multi_handedness
@@ -118,7 +140,12 @@ class VisionService:
                 
                 # Recognize gesture
                 gesture = self._recognize_gesture(hand_landmarks, hand_label)
-                
+                tracked_hands.append({
+                    "hand": hand_label if confidence >= 0.55 else None,
+                    "landmarks": hand_landmarks,
+                    "static_gesture": gesture,
+                })
+
                 if gesture:
                     gestures.append({
                         "gesture": gesture,
@@ -131,6 +158,46 @@ class VisionService:
                     if emoji:
                         emojis.append(emoji)
             
+            motion_diagnostics = {}
+            if tracking_session_id and timestamp_ms is not None:
+                motion_diagnostics = self.dynamic_gesture_tracker.update(
+                    tracking_session_id,
+                    timestamp_ms,
+                    tracked_hands,
+                )
+                for detected_gesture in gestures:
+                    motion = motion_diagnostics.get(detected_gesture["hand"])
+                    if not motion:
+                        continue
+                    if motion["dynamic_gesture"] == "wave":
+                        detected_gesture["gesture"] = "wave"
+                    detected_gesture.update({
+                        "movement_direction": motion["movement_direction"],
+                        "movement_displacement": motion["movement_displacement"],
+                        "movement_velocity": motion["movement_velocity"],
+                        "wrist_movement_direction": motion["wrist_movement_direction"],
+                        "wrist_movement_displacement": motion["wrist_movement_displacement"],
+                        "wrist_movement_velocity": motion["wrist_movement_velocity"],
+                        "dynamic_gesture_confidence": motion["dynamic_gesture_confidence"],
+                    })
+                emojis = [
+                    self.gesture_to_emoji[gesture["gesture"]]
+                    for gesture in gestures
+                    if gesture["gesture"] in self.gesture_to_emoji
+                ]
+            else:
+                # Without a camera-session key and timestamp, retain static-only behavior.
+                for detected_gesture in gestures:
+                    detected_gesture.update({
+                        "movement_direction": "unavailable",
+                        "movement_displacement": 0.0,
+                        "movement_velocity": 0.0,
+                        "wrist_movement_direction": "unavailable",
+                        "wrist_movement_displacement": 0.0,
+                        "wrist_movement_velocity": 0.0,
+                        "dynamic_gesture_confidence": 0.0,
+                    })
+
             return {
                 "hands_detected": len(results.multi_hand_landmarks),
                 "gestures": gestures,
@@ -140,28 +207,120 @@ class VisionService:
             
         except Exception as e:
             logger.exception("Error processing frame: %s", e)
+            if tracking_session_id:
+                self.dynamic_gesture_tracker.reset_movement_history(tracking_session_id)
             return {
-                "error": str(e),
-                "hands_detected": 0,
-                "gestures": [],
-                "emojis": []
+                "error": "Frame processing failed",
+                "error_type": "processing_error",
             }
-    
+
+    def extract_hand_landmarks(
+        self,
+        frame_data: str,
+        timestamp_ms: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Return MediaPipe observations without applying gesture-label heuristics."""
+        if not self.mediapipe_available:
+            return {
+                "error": "MediaPipe not installed",
+                "error_type": "vision_unavailable",
+            }
+
+        try:
+            image = self._decode_image(frame_data)
+        except (ValueError, cv2.error) as exc:
+            logger.warning("Rejected invalid landmark collection frame: %s", exc)
+            return {
+                "error": f"Invalid frame: {exc}",
+                "error_type": "invalid_frame",
+            }
+
+        try:
+            results = self.hands.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            landmarks_by_hand = results.multi_hand_landmarks or []
+            handedness_by_hand = results.multi_handedness or []
+            if len(landmarks_by_hand) != len(handedness_by_hand):
+                logger.error("MediaPipe returned mismatched hand landmarks and handedness")
+                return {
+                    "error": "Hand landmark metadata was incomplete",
+                    "error_type": "incomplete_detection",
+                }
+
+            captured_at = datetime.now(timezone.utc).isoformat()
+            observations = []
+            for hand_landmarks, handedness in zip(
+                landmarks_by_hand, handedness_by_hand
+            ):
+                if (
+                    not handedness.classification
+                    or len(hand_landmarks.landmark) != 21
+                ):
+                    logger.error("MediaPipe returned an incomplete hand observation")
+                    return {
+                        "error": "Hand landmark metadata was incomplete",
+                        "error_type": "incomplete_detection",
+                        "hands_detected": 0,
+                        "observations": [],
+                    }
+                classification = handedness.classification[0]
+                observations.append({
+                    "hand_side": classification.label,
+                    "handedness_confidence": float(classification.score),
+                    "timestamp": captured_at,
+                    "timestamp_ms": timestamp_ms,
+                    "landmarks": [
+                        {"x": float(point.x), "y": float(point.y), "z": float(point.z)}
+                        for point in hand_landmarks.landmark
+                    ],
+                })
+
+            return {
+                "hands_detected": len(observations),
+                "observations": observations,
+            }
+        except Exception as exc:
+            logger.exception("Error extracting hand landmarks: %s", exc)
+            return {
+                "error": "Landmark extraction failed",
+                "error_type": "processing_error",
+            }
+
     def _decode_image(self, frame_data: str) -> np.ndarray:
         """Decode base64 image to numpy array"""
+        if not isinstance(frame_data, str) or not frame_data.strip():
+            raise ValueError("Frame data is empty")
+
         # Remove data URL prefix if present
         if "base64," in frame_data:
             frame_data = frame_data.split("base64,")[1]
-        
+
         # Decode base64
-        img_bytes = base64.b64decode(frame_data)
-        
+        try:
+            img_bytes = base64.b64decode(frame_data, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise ValueError("Frame data is not valid base64") from exc
+
+        if not img_bytes:
+            raise ValueError("Frame image data is empty")
+
         # Convert to numpy array
         nparr = np.frombuffer(img_bytes, np.uint8)
-        
+
         # Decode image
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+        try:
+            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        except cv2.error as exc:
+            raise ValueError("Frame data does not contain a valid image") from exc
+
+        if (
+            image is None or
+            image.size == 0 or
+            image.ndim != 3 or
+            image.shape[0] <= 0 or
+            image.shape[1] <= 0
+        ):
+            raise ValueError("Frame data does not contain a valid image")
+
         return image
     
     def _recognize_gesture(self, landmarks, hand_label: str) -> Optional[str]:
@@ -273,10 +432,9 @@ class VisionService:
             else:
                 return "open_palm"
         
-        # Wave: open palm with horizontal movement (detected over multiple frames)
-        # For now, just detect open palm
+        # An open-looking static pose is not a wave; motion tracking decides that.
         if all([fingers_up["index"], fingers_up["middle"], fingers_up["ring"], fingers_up["pinky"]]):
-            return "wave"
+            return "open_palm"
         
         return None
     

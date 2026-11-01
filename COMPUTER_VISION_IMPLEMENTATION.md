@@ -1,6 +1,11 @@
 # Computer Vision Implementation Summary
 ## Real-time Gesture Recognition Added to Communication Bridge AI
 
+> Historical implementation snapshot: the claims below are not evidence of
+> current runtime status or recognition accuracy. Recognition currently uses
+> heuristics; no trained or validated sign-language model is included. See
+> [Current Features](docs/CURRENT_FEATURES.md).
+
 ---
 
 ## ✅ What Was Implemented

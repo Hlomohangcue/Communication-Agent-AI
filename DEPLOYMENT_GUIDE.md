@@ -1,5 +1,9 @@
 # Communication Bridge AI - Deployment Guide
 
+> Historical deployment instructions: the provider, API-key, and infrastructure
+> assumptions below are not current verified configuration. No deployment is
+> claimed. See [Current Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
+
 ## 🚀 Quick Start (Local Development)
 
 ### Prerequisites

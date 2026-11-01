@@ -1,6 +1,10 @@
 # NVIDIA GPU Deployment Plan
 ## Communication Bridge AI - GPU-Enhanced Version
 
+> Historical proposal only; no GPU or public deployment is configured or
+> verified by this document. Current deployment status is in
+> [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
+
 This guide will help you leverage your NVIDIA GPU credits to create a more powerful version of your Communication Bridge AI system.
 
 ---

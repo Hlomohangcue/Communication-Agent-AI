@@ -1,0 +1,17 @@
+.env
+.env.*
+.cloudflared/
+*.cloudflared
+.git/
+.venv/
+.claude/
+CLAUDE.md
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+data/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+*.jsonl

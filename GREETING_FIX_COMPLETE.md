@@ -1,5 +1,9 @@
 # Greeting System Fix - Complete ✅
 
+> Historical implementation note; this is not a current end-to-end validation
+> report. Generic emoji/gesture mappings are not sign-language translation.
+> See [Current Features](docs/CURRENT_FEATURES.md).
+
 ## Issue Resolved
 The system now correctly responds to all greeting variations, both emoji gestures and text input.
 

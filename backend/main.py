@@ -19,6 +19,13 @@ try:
     from auth.auth_handler import AuthHandler
     from services.vision_service import VisionService
     from services.gesture_meanings import GestureMeaningService
+    from services.gesture_dataset import (
+        DATASET_VERSION,
+        FEATURE_VERSION,
+        MIN_DYNAMIC_OBSERVATIONS,
+        DatasetValidationError,
+        GestureDatasetService,
+    )
     from core.logging_config import configure_logging
     from core.settings import settings
 except ImportError:
@@ -29,6 +36,13 @@ except ImportError:
     from backend.auth.auth_handler import AuthHandler
     from backend.services.vision_service import VisionService
     from backend.services.gesture_meanings import GestureMeaningService
+    from backend.services.gesture_dataset import (
+        DATASET_VERSION,
+        FEATURE_VERSION,
+        MIN_DYNAMIC_OBSERVATIONS,
+        DatasetValidationError,
+        GestureDatasetService,
+    )
     from backend.core.logging_config import configure_logging
     from backend.core.settings import settings
 
@@ -54,6 +68,11 @@ gesture_agent = GestureAgent()
 auth_handler = AuthHandler()
 vision_service = VisionService()  # Initialize vision service
 gesture_meaning_service = GestureMeaningService()  # Initialize gesture meaning service
+gesture_dataset_service = GestureDatasetService(
+    settings.gesture_dataset_path,
+    gesture_labels=settings.gesture_dataset_labels,
+    dynamic_labels=settings.gesture_dataset_dynamic_labels,
+)
 
 frontend_dir = Path(__file__).resolve().parents[1] / "frontend"
 if frontend_dir.exists():
@@ -69,6 +88,14 @@ def require_owned_session(session_id: str, user_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     return session
+
+def require_gesture_dataset_collector(current_user: Dict[str, Any]) -> None:
+    allowed_user_ids = settings.gesture_dataset_collector_ids
+    if not allowed_user_ids or current_user.get("id") not in allowed_user_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="Gesture dataset collection is not enabled for this account",
+        )
 
 # Authentication dependency
 async def get_current_user(authorization: Optional[str] = Header(None)):
@@ -132,6 +159,15 @@ class ProcessFrameRequest(BaseModel):
     frame: str = ""  # Base64 encoded image
     session_id: Optional[str] = None
     gestures: Optional[List[Dict[str, Any]]] = None
+    detection_session_id: Optional[str] = Field(None, min_length=1, max_length=64)
+    frame_timestamp_ms: Optional[float] = Field(None, ge=0, allow_inf_nan=False)
+
+class LandmarkFrameRequest(BaseModel):
+    frame: str = Field(min_length=1)
+    frame_timestamp_ms: float = Field(ge=0, allow_inf_nan=False)
+
+class GestureDatasetRecordsRequest(BaseModel):
+    records: List[Dict[str, Any]] = Field(min_length=1, max_length=5000)
 
 @app.get("/")
 async def root():
@@ -412,13 +448,70 @@ async def get_gesture_history(session_id: str, limit: int = 50, current_user: di
 
 # Computer Vision Endpoints
 
+@app.get("/vision/collection-config")
+async def get_gesture_collection_config(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the configured labels and landmark schema for authenticated collectors."""
+    require_gesture_dataset_collector(current_user)
+    return {
+        "dataset_version": DATASET_VERSION,
+        "feature_version": FEATURE_VERSION,
+        "gesture_labels": list(gesture_dataset_service.gesture_labels),
+        "dynamic_labels": list(gesture_dataset_service.dynamic_labels),
+        "minimum_dynamic_observations": MIN_DYNAMIC_OBSERVATIONS,
+    }
+
+@app.post("/vision/collect-frame")
+async def collect_landmark_frame(
+    request: LandmarkFrameRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Extract MediaPipe landmarks without applying the heuristic gesture classifier."""
+    require_gesture_dataset_collector(current_user)
+    return vision_service.extract_hand_landmarks(
+        request.frame,
+        timestamp_ms=request.frame_timestamp_ms,
+    )
+
+@app.post("/vision/dataset/recordings")
+async def save_gesture_dataset_recording(
+    request: GestureDatasetRecordsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Validate and append collector-labelled observations to the versioned JSONL dataset."""
+    require_gesture_dataset_collector(current_user)
+    try:
+        saved_count = gesture_dataset_service.save_records(request.records)
+    except DatasetValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OSError as exc:
+        logger.exception("Could not save gesture dataset recording")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save gesture dataset recording",
+        ) from exc
+    return {
+        "saved_count": saved_count,
+        "dataset_version": DATASET_VERSION,
+    }
+
 @app.post("/vision/process-frame")
 async def process_frame(request: ProcessFrameRequest, current_user: dict = Depends(get_current_user)):
     """Process a webcam frame and detect gestures"""
     if request.session_id:
         require_owned_session(request.session_id, current_user["id"])
 
-    result = vision_service.process_frame(request.frame)
+    tracking_session_id = (
+        f"{current_user['id']}:{request.detection_session_id}"
+        if request.detection_session_id
+        else None
+    )
+    result = vision_service.process_frame(
+        request.frame,
+        tracking_session_id=tracking_session_id,
+        timestamp_ms=request.frame_timestamp_ms,
+    )
     
     # If gestures detected and session provided, store them
     if request.session_id and result.get("emojis"):
@@ -441,7 +534,16 @@ async def gesture_to_text(request: ProcessFrameRequest, current_user: dict = Dep
     Complete flow: Webcam → Gesture → Emoji → AI Response
     """
     # Process frame
-    vision_result = vision_service.process_frame(request.frame)
+    tracking_session_id = (
+        f"{current_user['id']}:{request.detection_session_id}"
+        if request.detection_session_id
+        else None
+    )
+    vision_result = vision_service.process_frame(
+        request.frame,
+        tracking_session_id=tracking_session_id,
+        timestamp_ms=request.frame_timestamp_ms,
+    )
     
     if not vision_result.get("emojis"):
         return {
@@ -496,7 +598,16 @@ async def interpret_gesture(request: ProcessFrameRequest, current_user: dict = D
     else:
         if not request.frame:
             raise HTTPException(status_code=400, detail="Either frame or gestures is required")
-        vision_result = vision_service.process_frame(request.frame)
+        tracking_session_id = (
+            f"{current_user['id']}:{request.detection_session_id}"
+            if request.detection_session_id
+            else None
+        )
+        vision_result = vision_service.process_frame(
+            request.frame,
+            tracking_session_id=tracking_session_id,
+            timestamp_ms=request.frame_timestamp_ms,
+        )
     
     if not vision_result.get("gestures"):
         return {
@@ -514,6 +625,12 @@ async def interpret_gesture(request: ProcessFrameRequest, current_user: dict = D
     
     # Interpret gestures and generate meaningful response
     interpretation = gesture_meaning_service.generate_response(gesture_names, context="general")
+    for detail, detected_gesture in zip(
+        interpretation.get("gesture_details", []),
+        vision_result["gestures"],
+    ):
+        detail["hand"] = detected_gesture.get("hand")
+        detail["confidence"] = detected_gesture.get("confidence")
     
     # Store in database if session provided
     if request.session_id:

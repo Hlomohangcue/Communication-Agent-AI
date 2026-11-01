@@ -75,11 +75,13 @@ class Coordinator:
             workflow.append({"agent": "intent_agent_retry", "result": intent_result})
         
         # Step 4: Generate speech/text output
-        self._log_agent_action(session_id, user_id, "speech_agent", "started", {"intent": intent_result})
+        context = self.context_agent.get_context(session_id, user_id, limit=6)
+        self._log_agent_action(session_id, user_id, "speech_agent", "started", {"intent": intent_result, "context_summary": context.get("summary") if context else None})
         output = await self.speech_agent.generate_output(
             intent=intent_result["intent"],
             semantic_meaning=interpretation["semantic_meaning"],
-            confidence=intent_result["confidence"]
+            confidence=intent_result["confidence"],
+            context=context,
         )
         workflow.append({"agent": "speech_agent", "result": output})
         self._log_agent_action(session_id, user_id, "speech_agent", "completed", output)

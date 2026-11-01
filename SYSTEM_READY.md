@@ -1,5 +1,10 @@
 # 🎉 System Ready - Computer Vision Implementation Complete!
 
+> Historical status snapshot only. The dated server, provider, and operational
+> claims below do not describe verified current status. No public deployment or
+> physical webcam validation is claimed. See [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
+> and [Current Features](docs/CURRENT_FEATURES.md).
+
 ## ✅ Status: FULLY OPERATIONAL
 
 **Date:** February 13, 2026  

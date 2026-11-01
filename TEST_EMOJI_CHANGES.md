@@ -1,5 +1,9 @@
 # Testing Guide: Emoji Gesture Changes
 
+> Historical manual test notes, not a current test report. Use
+> [Testing Guide](docs/TESTING.md) for current automated checks. Emoji mappings
+> do not establish validated sign-language translation.
+
 ## Quick Test Steps
 
 ### 1. Start the Backend

@@ -1,321 +1,136 @@
 # Communication Bridge AI
 
-[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-active-success.svg)](#)
+Communication Bridge AI is an **AI-assisted hand-gesture communication prototype**. It combines a browser interface with authenticated FastAPI services for text, speech, emoji-based communication, webcam hand-gesture demonstrations, and conversation history.
 
-Communication Bridge AI is a FastAPI-based system that helps bridge communication between verbal and non-verbal users using text, gesture interpretation, and AI-assisted responses.
+It is a prototype, not a complete sign-language translator. Webcam gesture labels currently come from geometric heuristics, and the project has no trained or independently validated recognition model.
 
-## Project Overview
-This project supports communication in mixed ability contexts, including classroom and support scenarios, by combining:
-- a browser-based interaction frontend,
-- authenticated FastAPI APIs,
-- a coordinator with specialized agents,
-- gesture-to-meaning processing from vision input,
-- persistence for sessions, messages, and logs.
+## Problem and proposed solution
 
-Why it is technically interesting:
-- Multi-agent workflow orchestration with fallback logic.
-- End-to-end gesture pipeline from frame processing to contextual response.
-- Session ownership enforcement and JWT-authenticated API boundaries.
-- Production-oriented checks with lint, tests, security audit, and compile validation in CI.
+People using different communication methods can have difficulty sharing simple needs and responses. This project explores a browser-based interface that accepts text, speech, selected symbols, and a small set of webcam-recognized hand poses, then presents text or emoji responses. Optional Gemini-backed agent responses supplement deterministic fallback behavior.
 
-## Core Features
-- Bidirectional communication flows.
-- Gesture detection and interpretation.
-- Text-to-gesture translation.
-- Context-aware AI responses with fallback logic.
-- Authentication and credit-based usage controls.
-- Session history and operational logs.
+## Current status
 
-## Architecture
+- Local prototype with account authentication, conversation sessions, SQLite storage, and a static HTML/CSS/JavaScript interface.
+- Webcam hand detection uses MediaPipe and OpenCV; gesture labels are currently assigned by hand-written coordinate/finger heuristics.
+- A collector-only landmark dataset path is implemented. It stores collector-supplied labels and MediaPipe landmark records; collection has not been physically verified, and no model has been trained or validated.
+- No public deployment or hosted demo is configured by this repository.
+- Do not describe the application as validated ASL or SASL recognition/translation.
 
-```mermaid
-flowchart LR
-    FE[Frontend HTML/CSS/JS]
-    AUTH[AuthHandler JWT and password hashing]
-    API[FastAPI routes in backend/main.py]
-    COORD[Coordinator and simulation orchestrator]
-    AGENTS[Intent NonVerbal Speech Gesture agents]
-    VISION[VisionService and GestureMeaningService]
-    DB[(SQLite via Database layer)]
-    LLM[Gemini via shared llm_client]
+## Main capabilities
 
-    FE --> API
-    API --> AUTH
-    API --> COORD
-    API --> VISION
-    COORD --> AGENTS
-    AGENTS --> LLM
-    COORD --> DB
-    API --> DB
-    VISION --> DB
-```
+- Email/password signup and login with JWT authentication and bcrypt password hashing.
+- Session-based communication, conversation history, agent logs, and credit tracking in SQLite.
+- Text and browser speech input; speech recognition depends on browser support and user permission.
+- Emoji/token input and responses through rule-based intent/meaning handling and optional Gemini-backed agents.
+- Text-to-emoji gesture sequences using phrase matching, keyword mapping, optional Gemini generation, and a generic fallback. This does not produce validated sign-language translation.
+- Webcam hand detection and heuristic pose labels for supported examples; dynamic waving is recognized with movement thresholds.
+- Authenticated landmark collection for allowlisted collectors, with JSONL validation and participant-disjoint dataset export.
 
-Detailed architecture notes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+See [Current features](docs/CURRENT_FEATURES.md) for what is tested, unverified, partial, and not implemented.
 
-## Request Lifecycle Example
-Representative flow for authenticated gesture interpretation using [backend/main.py](backend/main.py):
+## Technology stack
 
-```mermaid
-sequenceDiagram
-		participant U as User Browser
-		participant A as FastAPI
-		participant H as AuthHandler
-		participant V as VisionService
-		participant M as GestureMeaningService
-		participant D as Database
+- Python 3.11, FastAPI, Uvicorn, Pydantic
+- MediaPipe Hands, OpenCV, NumPy
+- SQLite
+- HTML, CSS, and vanilla JavaScript
+- JWT and bcrypt
+- Optional Google Gemini integration through `google-generativeai`
+- pytest for Python tests; Node's built-in test runner for frontend utility tests
 
-		U->>A: POST /vision/interpret-gesture\nAuthorization: Bearer token
-		A->>H: decode_token(token)
-		H-->>A: current_user
-		A->>V: process_frame(frame) or use provided gestures
-		V-->>A: detected gestures and emojis
-		A->>M: generate_response(gesture_names)
-		M-->>A: interpretation and response
-		A->>D: store_message(...) when session_id provided
-		A-->>U: success payload with interpretation
-```
+## Requirements
 
-## Installation
-### Prerequisites
-- Python 3.11 (tested in CI)
-- pip
-- Optional: Gemini API key for AI-enhanced generation
+- Windows, Linux, or macOS; Python 3.11 is the tested runtime.
+- pip and network access to install the pinned dependencies.
+- A modern browser for the dashboard. Webcam and microphone permissions are needed for those input modes. Browsers generally require localhost or HTTPS for camera access.
+- Node.js is required only for the frontend Node test files.
+- A Gemini API key is optional. Without it, documented rule-based and template fallbacks are used.
 
-### Python Compatibility Note
-This repository is currently tested on Python 3.11 in CI. The dependency [mediapipe==0.10.8](requirements.txt) may not provide install wheels for all newer Python versions in all environments. Use Python 3.11 for the most reliable setup.
+## Local installation (Windows PowerShell)
 
-### Setup
-```bash
-git clone https://github.com/Hlomohangcue/Communication-Agent-AI.git
-cd Communication-Agent-AI
-python -m venv .venv
-```
+From the repository root:
 
-Windows PowerShell:
 ```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Linux or macOS:
-```bash
-source .venv/bin/activate
-```
-
-Install dependencies:
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-dev.txt
-```
-
-Create local environment file:
-```bash
-cp .env.example .env
-```
-
-Windows PowerShell alternative:
-```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 ```
 
+Edit `.env` as needed. For local development, `APP_ENV=development` uses the documented development-only JWT fallback if no key is set. Do not use that fallback outside local development.
+
 ## Configuration
-Edit .env and set at minimum:
-- GEMINI_API_KEY
-- JWT_SECRET_KEY
-- CORS_ORIGINS
 
-Guidance:
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
-- [docs/SECURITY.md](docs/SECURITY.md)
+The application loads environment values from the process environment and, if present, the repository-root `.env` file. Main settings include:
 
-## Running Locally
-### Backend
-```bash
-cd backend
-python main.py
+| Variable | Purpose |
+|---|---|
+| `APP_ENV` | `development`, `testing`, `staging`, or `production`; staging/production require a JWT secret and explicit non-local CORS origins. |
+| `JWT_SECRET_KEY` | JWT signing secret; required in staging and production. |
+| `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` | Token algorithm and lifetime. |
+| `DATABASE_PATH` | SQLite database path; defaults to `data/communication_bridge.db`. |
+| `HOST`, `PORT` | Uvicorn host and port; defaults to `0.0.0.0:8000`. |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Optional external AI integration settings. |
+| `CORS_ORIGINS`, `CORS_ALLOW_CREDENTIALS` | Browser-origin access settings. |
+| `DEFAULT_CONFIDENCE_THRESHOLD` | Coordinator intent retry threshold. |
+| `GESTURE_DATASET_PATH` | Collector JSONL path; defaults to `data/gesture_dataset_v1.jsonl`. |
+| `GESTURE_DATASET_LABELS`, `GESTURE_DATASET_DYNAMIC_LABELS` | Configurable collector labels and dynamic-label subset. |
+| `GESTURE_DATASET_COLLECTOR_IDS` | Comma-separated account IDs permitted to use dataset collection; empty disables collection. |
+
+See [.env.example](.env.example) and [Installation and setup](docs/INSTALLATION_AND_SETUP.md). Do not commit `.env`, secrets, or collected dataset files.
+
+## Start the backend and open the dashboard
+
+From the repository root, start the API:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-### Frontend
-Open [frontend/login.html](frontend/login.html) directly or serve static files:
-```bash
-python -m http.server 8080 --directory frontend
+Open [http://127.0.0.1:8000/ui](http://127.0.0.1:8000/ui). The UI redirects to the login page; sign up for a local account, then log in. The backend serves the static frontend under `/app`.
+
+## Tests and checks
+
+From the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+node --test tests\*.test.js
+.\.venv\Scripts\python.exe -m compileall -q backend scripts
 ```
 
-## Visual Showcase
-The following are preview mockups (SVG assets), not production screenshots:
+The CI workflow also runs Ruff, `pip-audit`, pytest, and a Python compile check. The local environment may need Ruff and pip-audit installed separately to run those optional checks.
 
-### Dashboard Preview Mockup
-![Dashboard preview mockup](docs/assets/dashboard-preview.svg)
+## Known limitations
 
-### Gesture Mode Preview Mockup
-![Gesture mode preview mockup](docs/assets/gesture-mode-preview.svg)
-
-### Demo Walkthrough Storyboard Mockup
-![Demo walkthrough storyboard mockup](docs/assets/demo-walkthrough.svg)
-
-## Demo
-No public hosted demo or video is currently linked in this repository.
-Preview visuals are included above, and a live demo/video can be added in a future update.
-
-## API
-
-### Endpoint Access Table
-| Method | Endpoint | Access |
-|---|---|---|
-| GET | / | Public |
-| POST | /auth/signup | Public |
-| POST | /auth/login | Public |
-| GET | /auth/verify | Authenticated |
-| GET | /auth/me | Authenticated |
-| GET | /auth/credits | Authenticated |
-| POST | /simulate/start | Authenticated |
-| POST | /simulate/step | Authenticated |
-| POST | /communicate | Authenticated |
-| GET | /logs | Authenticated |
-| GET | /session/{session_id} | Authenticated |
-| DELETE | /session/{session_id} | Authenticated |
-| GET | /sessions | Authenticated |
-| POST | /save_message | Authenticated |
-| POST | /translate/text-to-gesture | Authenticated |
-| GET | /gestures | Public |
-| GET | /phrases | Public |
-| POST | /phrases/custom | Authenticated |
-| GET | /gesture-history/{session_id} | Authenticated |
-| POST | /vision/process-frame | Authenticated |
-| GET | /vision/gestures | Public |
-| POST | /vision/gesture-to-text | Authenticated |
-| POST | /vision/interpret-gesture | Authenticated |
-
-### API Example 1: Signup (Public)
-Method and endpoint: POST /auth/signup
-
-Request body:
-```json
-{
-	"name": "Alex",
-	"email": "alex@example.com",
-	"password": "StrongPass123"
-}
-```
-
-Example response:
-```json
-{
-	"message": "User created successfully",
-	"user": {
-		"id": "7fcb2a67-8ac7-4a1a-bf88-0e16d4ec4be3",
-		"email": "alex@example.com",
-		"name": "Alex",
-		"credits": 100
-	}
-}
-```
-
-### API Example 2: Start Simulation (Authenticated)
-Method and endpoint: POST /simulate/start
-
-Authentication: Bearer token required
-
-Example response:
-```json
-{
-	"session_id": "9e8f5ad4-c9ab-4d88-a3fb-47bb8b6a447f",
-	"status": "started",
-	"message": "Classroom simulation initialized",
-	"user_credits": 99
-}
-```
-
-### API Example 3: Interpret Gesture (Authenticated)
-Method and endpoint: POST /vision/interpret-gesture
-
-Authentication: Bearer token required
-
-Request body (gesture payload mode):
-```json
-{
-	"session_id": "9e8f5ad4-c9ab-4d88-a3fb-47bb8b6a447f",
-	"gestures": [
-		{"gesture": "thumbs_up", "confidence": 0.93}
-	]
-}
-```
-
-Example response:
-```json
-{
-	"success": true,
-	"vision_result": {
-		"hands_detected": 1,
-		"gestures": [{"gesture": "thumbs_up", "confidence": 0.93}],
-		"emojis": ["👍"],
-		"confidence": 0.8
-	},
-	"detected_gestures": [{"gesture": "thumbs_up", "confidence": 0.93}],
-	"message": "Example interpretation message",
-	"response": "Example generated response",
-	"meanings": ["example meaning"]
-}
-```
-
-Detailed endpoint reference: [docs/API.md](docs/API.md)
-
-## Testing and Quality Checks
-Use these commands from the repository root after activating your virtual environment:
-
-```bash
-python -m pytest
-python -m ruff check backend tests
-python -m compileall backend
-python -m pip_audit -r requirements.txt
-```
-
-Note: if pip-audit is not installed, run python -m pip install pip-audit first.
-
-Detailed testing guide: [docs/TESTING.md](docs/TESTING.md)
-
-## Deployment
-Deployment resources in this repository:
-- [Dockerfile](Dockerfile): container image build for the backend service.
-- [nginx.conf](nginx.conf): reverse proxy template for fronting the API.
-- [deploy_vultr.sh](deploy_vultr.sh): server provisioning and deployment helper script.
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): deployment guide and production recommendations.
-
-Production readiness depends on environment-specific validation (TLS, secrets, monitoring, and scaling) and should be verified per target platform.
-
-## Documentation
-Canonical references:
-- API documentation: [docs/API.md](docs/API.md)
-- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Development guide: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
-- Testing guide: [docs/TESTING.md](docs/TESTING.md)
-- Deployment guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- Security policy and design: [SECURITY.md](SECURITY.md) and [docs/SECURITY.md](docs/SECURITY.md)
-- Repository audit: [REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)
-- Cleanup report: [CLEANUP_REPORT.md](CLEANUP_REPORT.md)
-- Architecture decision records: [docs/adr](docs/adr)
+- Gesture classes are not produced by a trained model. Static labels use simplified coordinate heuristics; the wave label depends on open-pose and movement thresholds. Handedness confidence is not gesture-class confidence.
+- Generic gestures and emoji meanings are ambiguous and context-dependent. They are not validated ASL or SASL signs.
+- No validated SASL training dataset, appropriate annotations, qualified linguistic validation, or sign-language translation system is included.
+- Gemini output requires network access and a configured key. Fallback responses are deterministic/rule-based and have reduced language understanding.
+- The landmark collector and export path have automated tests but have not been physically verified with a webcam or representative participants.
+- Browser speech recognition, webcam lighting/position variation, and deployment behavior have not been comprehensively tested across devices.
+- Deployment resources are templates and have not been validated as a public demo deployment.
 
 ## Roadmap
-### Completed
-- JWT authentication and protected endpoint boundaries.
-- Session ownership checks for session-bound reads and writes.
-- Shared LLM client integration with fallback behavior support.
-- CI pipeline with lint, tests, dependency audit, and compile checks.
 
-### In Progress
-- Frontend modularization and UI structure cleanup.
-- Documentation harmonization across root and docs directories.
+1. Verify local login, conversation, camera, microphone, and collector workflows on the intended demo hardware.
+2. Collect consented, genuinely labelled landmark data across multiple participants and conditions; review data quality and participant-separated splits.
+3. Train and evaluate a landmark-based static gesture model with calibrated confidence and `UNKNOWN` rejection before considering replacement of heuristics.
+4. Evaluate a separate temporal model for movement gestures against held-out participants and hard negatives.
+5. Consider any SASL research only with validated SASL datasets, suitable annotations, and qualified linguistic review.
+6. Validate deployment configuration, secrets, TLS, persistence, backups, and monitoring before any public release.
 
-### Planned
-- Async-compatible database layer for scale.
-- Additional LLM guardrails and policy checks.
-- Expanded release automation and security coverage.
+## Documentation
 
-## Contributing
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening issues or pull requests.
+- [Project overview](docs/PROJECT_OVERVIEW.md)
+- [System architecture](docs/SYSTEM_ARCHITECTURE.md)
+- [Current features and verification status](docs/CURRENT_FEATURES.md)
+- [Installation and setup](docs/INSTALLATION_AND_SETUP.md)
+- [Demonstration guide](docs/DEMONSTRATION_GUIDE.md)
+- [Limitations and future work](docs/LIMITATIONS_AND_FUTURE_WORK.md)
+- [Deployment guide](docs/DEPLOYMENT_GUIDE.md)
+- [API reference](docs/API.md)
+- [Gesture dataset collection](docs/GESTURE_DATASET_COLLECTION.md)
 
-## License
-MIT License. See [LICENSE](LICENSE).
+Some older root-level implementation notes are historical snapshots and may use imprecise “ASL” or “sign translation” wording. They are not evidence of validated sign-language capability; use the current-feature and limitation documents above for the repository's present status.
