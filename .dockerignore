@@ -11,6 +11,7 @@ __pycache__/
 .pytest_cache/
 data/
 backups/
+models/hand_landmarker.task
 *.db
 *.sqlite
 *.sqlite3

@@ -4,53 +4,85 @@ from typing import Dict, Any, Optional, List
 import base64
 import binascii
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .dynamic_gesture_tracker import DynamicGestureTracker
 
 
 logger = logging.getLogger(__name__)
 
+
 class VisionService:
     """
     Computer vision service for hand gesture recognition
-    Uses MediaPipe Hands for real-time hand tracking
-    Uses MediaPipe's legacy Solutions Hands API.
+    Uses MediaPipe Tasks for real-time hand landmark detection.
     """
-    
+
+    LANDMARK_INDEX = {
+        "WRIST": 0,
+        "THUMB_IP": 3,
+        "THUMB_TIP": 4,
+        "INDEX_FINGER_MCP": 5,
+        "INDEX_FINGER_PIP": 6,
+        "INDEX_FINGER_TIP": 8,
+        "MIDDLE_FINGER_MCP": 9,
+        "MIDDLE_FINGER_PIP": 10,
+        "MIDDLE_FINGER_TIP": 12,
+        "RING_FINGER_MCP": 13,
+        "RING_FINGER_PIP": 14,
+        "RING_FINGER_TIP": 16,
+        "PINKY_FINGER_MCP": 17,
+        "PINKY_FINGER_PIP": 18,
+        "PINKY_FINGER_TIP": 20,
+    }
+
     def __init__(self):
         self.dynamic_gesture_tracker = DynamicGestureTracker()
+        self.mp = None
+        self.hand_landmarker = None
         try:
             import mediapipe as mp
-            
-            # Use MediaPipe's legacy Solutions Hands API.
-            self.mp_hands = mp.solutions.hands
-            self.mp_drawing = mp.solutions.drawing_utils
-            
-            # Initialize hands detector
-            self.hands = self.mp_hands.Hands(
-                static_image_mode=False,
-                max_num_hands=2,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
+
+            model_path = Path(
+                os.environ.get(
+                    "MEDIAPIPE_HAND_LANDMARKER_MODEL_PATH",
+                    Path(__file__).resolve().parents[2]
+                    / "models"
+                    / "hand_landmarker.task",
+                )
             )
-            
+            options = mp.tasks.vision.HandLandmarkerOptions(
+                base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
+                running_mode=mp.tasks.vision.RunningMode.IMAGE,
+                num_hands=2,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+            self.mp = mp
+            self.hand_landmarker = (
+                mp.tasks.vision.HandLandmarker.create_from_options(options)
+            )
             self.mediapipe_available = True
-            logger.info("MediaPipe initialized successfully (version=%s)", mp.__version__)
-                
+            logger.info(
+                "MediaPipe Tasks initialized successfully (version=%s)",
+                mp.__version__,
+            )
         except ImportError:
             self.mediapipe_available = False
-            self.hands = None
-            self.mp_hands = None
-            self.mp_drawing = None
-            logger.warning("MediaPipe not installed; vision features are disabled")
-        except Exception as e:
+            logger.warning("MediaPipe is not installed; vision features are disabled")
+        except FileNotFoundError:
             self.mediapipe_available = False
-            self.hands = None
-            self.mp_hands = None
-            self.mp_drawing = None
-            logger.exception("MediaPipe initialization error: %s", e)
-        
+            logger.error(
+                "MediaPipe hand-landmarker model is missing; configure "
+                "MEDIAPIPE_HAND_LANDMARKER_MODEL_PATH"
+            )
+        except Exception as exc:
+            self.mediapipe_available = False
+            logger.exception("MediaPipe initialization error: %s", exc)
+
         # Gesture mappings
         self.gesture_to_emoji = {
             "wave": "👋",
@@ -90,7 +122,7 @@ class VisionService:
         """
         if not self.mediapipe_available:
             return {
-                "error": "MediaPipe not installed",
+                "error": "Hand landmark detection is unavailable",
                 "error_type": "vision_unavailable",
             }
         
@@ -106,13 +138,18 @@ class VisionService:
             }
 
         try:
-            # Convert BGR to RGB
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            
-            # Process with MediaPipe
-            results = self.hands.process(image_rgb)
-            
-            if not results.multi_hand_landmarks:
+            results = self._detect_hands(image)
+            landmarks_by_hand = results.hand_landmarks or []
+            handedness_by_hand = results.handedness or []
+
+            if len(landmarks_by_hand) != len(handedness_by_hand):
+                logger.error("MediaPipe returned mismatched hand landmarks and handedness")
+                return {
+                    "error": "Hand landmark metadata was incomplete",
+                    "error_type": "incomplete_detection",
+                }
+
+            if not landmarks_by_hand:
                 if tracking_session_id and timestamp_ms is not None:
                     self.dynamic_gesture_tracker.update(
                         tracking_session_id,
@@ -132,12 +169,19 @@ class VisionService:
             tracked_hands = []
 
             for hand_landmarks, handedness in zip(
-                results.multi_hand_landmarks,
-                results.multi_handedness
+                landmarks_by_hand,
+                handedness_by_hand,
             ):
-                hand_label = handedness.classification[0].label  # "Left" or "Right"
-                confidence = handedness.classification[0].score
-                
+                if not handedness:
+                    logger.error("MediaPipe returned missing handedness metadata")
+                    return {
+                        "error": "Hand landmark metadata was incomplete",
+                        "error_type": "incomplete_detection",
+                    }
+                classification = handedness[0]
+                hand_label = classification.category_name
+                confidence = float(classification.score)
+
                 # Recognize gesture
                 gesture = self._recognize_gesture(hand_landmarks, hand_label)
                 tracked_hands.append({
@@ -199,7 +243,7 @@ class VisionService:
                     })
 
             return {
-                "hands_detected": len(results.multi_hand_landmarks),
+                "hands_detected": len(landmarks_by_hand),
                 "gestures": gestures,
                 "emojis": emojis,
                 "confidence": sum(g["confidence"] for g in gestures) / len(gestures) if gestures else 0.0
@@ -214,6 +258,14 @@ class VisionService:
                 "error_type": "processing_error",
             }
 
+    def _detect_hands(self, image: np.ndarray):
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        task_image = self.mp.Image(
+            image_format=self.mp.ImageFormat.SRGB,
+            data=image_rgb,
+        )
+        return self.hand_landmarker.detect(task_image)
+
     def extract_hand_landmarks(
         self,
         frame_data: str,
@@ -222,7 +274,7 @@ class VisionService:
         """Return MediaPipe observations without applying gesture-label heuristics."""
         if not self.mediapipe_available:
             return {
-                "error": "MediaPipe not installed",
+                "error": "Hand landmark detection is unavailable",
                 "error_type": "vision_unavailable",
             }
 
@@ -236,9 +288,9 @@ class VisionService:
             }
 
         try:
-            results = self.hands.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            landmarks_by_hand = results.multi_hand_landmarks or []
-            handedness_by_hand = results.multi_handedness or []
+            results = self._detect_hands(image)
+            landmarks_by_hand = results.hand_landmarks or []
+            handedness_by_hand = results.handedness or []
             if len(landmarks_by_hand) != len(handedness_by_hand):
                 logger.error("MediaPipe returned mismatched hand landmarks and handedness")
                 return {
@@ -252,8 +304,8 @@ class VisionService:
                 landmarks_by_hand, handedness_by_hand
             ):
                 if (
-                    not handedness.classification
-                    or len(hand_landmarks.landmark) != 21
+                    not handedness
+                    or len(hand_landmarks) != 21
                 ):
                     logger.error("MediaPipe returned an incomplete hand observation")
                     return {
@@ -262,15 +314,15 @@ class VisionService:
                         "hands_detected": 0,
                         "observations": [],
                     }
-                classification = handedness.classification[0]
+                classification = handedness[0]
                 observations.append({
-                    "hand_side": classification.label,
+                    "hand_side": classification.category_name,
                     "handedness_confidence": float(classification.score),
                     "timestamp": captured_at,
                     "timestamp_ms": timestamp_ms,
                     "landmarks": [
                         {"x": float(point.x), "y": float(point.y), "z": float(point.z)}
-                        for point in hand_landmarks.landmark
+                        for point in hand_landmarks
                     ],
                 })
 
@@ -284,6 +336,10 @@ class VisionService:
                 "error": "Landmark extraction failed",
                 "error_type": "processing_error",
             }
+
+    @staticmethod
+    def _landmark_points(landmarks):
+        return getattr(landmarks, "landmark", landmarks)
 
     def _decode_image(self, frame_data: str) -> np.ndarray:
         """Decode base64 image to numpy array"""
@@ -335,20 +391,21 @@ class VisionService:
             Gesture name or None
         """
         # Get landmark positions
-        thumb_tip = landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP]
-        index_tip = landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
-        middle_tip = landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
-        ring_tip = landmarks.landmark[self.mp_hands.HandLandmark.RING_FINGER_TIP]
-        pinky_tip = landmarks.landmark[self.mp_hands.HandLandmark.PINKY_TIP]
-        
-        wrist = landmarks.landmark[self.mp_hands.HandLandmark.WRIST]
-        
-        thumb_ip = landmarks.landmark[self.mp_hands.HandLandmark.THUMB_IP]
-        index_mcp = landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP]
-        middle_mcp = landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_MCP]
-        ring_mcp = landmarks.landmark[self.mp_hands.HandLandmark.RING_FINGER_MCP]
-        pinky_mcp = landmarks.landmark[self.mp_hands.HandLandmark.PINKY_MCP]
-        
+        landmarks = self._landmark_points(landmarks)
+        thumb_tip = landmarks[self.LANDMARK_INDEX["THUMB_TIP"]]
+        index_tip = landmarks[self.LANDMARK_INDEX["INDEX_FINGER_TIP"]]
+        middle_tip = landmarks[self.LANDMARK_INDEX["MIDDLE_FINGER_TIP"]]
+        ring_tip = landmarks[self.LANDMARK_INDEX["RING_FINGER_TIP"]]
+        pinky_tip = landmarks[self.LANDMARK_INDEX["PINKY_FINGER_TIP"]]
+
+        wrist = landmarks[self.LANDMARK_INDEX["WRIST"]]
+
+        thumb_ip = landmarks[self.LANDMARK_INDEX["THUMB_IP"]]
+        index_mcp = landmarks[self.LANDMARK_INDEX["INDEX_FINGER_MCP"]]
+        middle_mcp = landmarks[self.LANDMARK_INDEX["MIDDLE_FINGER_MCP"]]
+        ring_mcp = landmarks[self.LANDMARK_INDEX["RING_FINGER_MCP"]]
+        pinky_mcp = landmarks[self.LANDMARK_INDEX["PINKY_FINGER_MCP"]]
+
         # Calculate which fingers are extended
         fingers_up = self._count_fingers_up(landmarks)
         
@@ -440,22 +497,24 @@ class VisionService:
     
     def _count_fingers_up(self, landmarks) -> Dict[str, bool]:
         """Count which fingers are extended"""
+        landmarks = self._landmark_points(landmarks)
+
         # Get key landmarks
-        thumb_tip = landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP]
-        thumb_ip = landmarks.landmark[self.mp_hands.HandLandmark.THUMB_IP]
-        
-        index_tip = landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
-        index_pip = landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_PIP]
-        
-        middle_tip = landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
-        middle_pip = landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_PIP]
-        
-        ring_tip = landmarks.landmark[self.mp_hands.HandLandmark.RING_FINGER_TIP]
-        ring_pip = landmarks.landmark[self.mp_hands.HandLandmark.RING_FINGER_PIP]
-        
-        pinky_tip = landmarks.landmark[self.mp_hands.HandLandmark.PINKY_TIP]
-        pinky_pip = landmarks.landmark[self.mp_hands.HandLandmark.PINKY_PIP]
-        
+        thumb_tip = landmarks[self.LANDMARK_INDEX["THUMB_TIP"]]
+        thumb_ip = landmarks[self.LANDMARK_INDEX["THUMB_IP"]]
+
+        index_tip = landmarks[self.LANDMARK_INDEX["INDEX_FINGER_TIP"]]
+        index_pip = landmarks[self.LANDMARK_INDEX["INDEX_FINGER_PIP"]]
+
+        middle_tip = landmarks[self.LANDMARK_INDEX["MIDDLE_FINGER_TIP"]]
+        middle_pip = landmarks[self.LANDMARK_INDEX["MIDDLE_FINGER_PIP"]]
+
+        ring_tip = landmarks[self.LANDMARK_INDEX["RING_FINGER_TIP"]]
+        ring_pip = landmarks[self.LANDMARK_INDEX["RING_FINGER_PIP"]]
+
+        pinky_tip = landmarks[self.LANDMARK_INDEX["PINKY_FINGER_TIP"]]
+        pinky_pip = landmarks[self.LANDMARK_INDEX["PINKY_FINGER_PIP"]]
+
         # Check if each finger is extended (tip above PIP joint)
         return {
             "thumb": thumb_tip.x < thumb_ip.x - 0.05 or thumb_tip.x > thumb_ip.x + 0.05,  # Horizontal check for thumb
@@ -482,5 +541,5 @@ class VisionService:
     
     def cleanup(self):
         """Clean up resources"""
-        if self.hands:
-            self.hands.close()
+        if self.hand_landmarker:
+            self.hand_landmarker.close()

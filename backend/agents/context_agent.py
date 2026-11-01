@@ -18,13 +18,14 @@ class ContextAgent:
             return None
 
         ordered_messages = list(reversed(messages))
-        context = {
+        context = self.session_contexts.get(key, {})
+        context.update({
             "recent_messages": ordered_messages,
             "summary": self._summarize_messages(ordered_messages),
             "limit": limit,
             "session_id": session_id,
             "user_id": user_id,
-        }
+        })
         self.session_contexts[key] = context
         return context
 
@@ -39,6 +40,10 @@ class ContextAgent:
             }
 
         context = self.session_contexts[key]
+        context.setdefault("interactions", [])
+        context.setdefault("patterns", {})
+        context.setdefault("created_at", datetime.utcnow().isoformat())
+        context.setdefault("limit", 6)
         context["interactions"].append({
             "timestamp": datetime.utcnow().isoformat(),
             "input": interaction.get("input"),

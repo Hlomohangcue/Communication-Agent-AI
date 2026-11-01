@@ -13,6 +13,7 @@ ENV/
 *.sqlite
 *.sqlite3
 /backups/
+/models/hand_landmarker.task
 /data/gesture_dataset_v1.jsonl
 /data/gesture_dataset_v1.jsonl.lock
 /data/gesture_splits/

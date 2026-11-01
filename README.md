@@ -11,7 +11,7 @@ People using different communication methods can have difficulty sharing simple 
 ## Current status
 
 - Local prototype with account authentication, conversation sessions, SQLite storage, and a static HTML/CSS/JavaScript interface.
-- Webcam hand detection uses MediaPipe and OpenCV; gesture labels are currently assigned by hand-written coordinate/finger heuristics.
+- Webcam hand landmarks use MediaPipe Tasks and OpenCV; gesture labels are currently assigned by hand-written coordinate/finger heuristics.
 - A collector-only landmark dataset path is implemented. It stores collector-supplied labels and MediaPipe landmark records; collection has not been physically verified, and no model has been trained or validated.
 - No public deployment or hosted demo is configured by this repository.
 - Do not describe the application as validated ASL or SASL recognition/translation.
@@ -31,7 +31,7 @@ See [Current features](docs/CURRENT_FEATURES.md) for what is tested, unverified,
 ## Technology stack
 
 - Python 3.11, FastAPI, Uvicorn, Pydantic
-- MediaPipe Hands, OpenCV, NumPy
+- MediaPipe Hand Landmarker Tasks, OpenCV, NumPy
 - SQLite
 - HTML, CSS, and vanilla JavaScript
 - JWT and bcrypt
@@ -55,6 +55,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe scripts\download_hand_landmarker.py
 Copy-Item .env.example .env
 ```
 
@@ -72,6 +73,7 @@ The application loads environment values from the process environment and, if pr
 | `DATABASE_PATH` | SQLite database path; defaults to `data/communication_bridge.db`. |
 | `HOST`, `PORT` | Uvicorn host and port; defaults to `0.0.0.0:8000`. |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Optional external AI integration settings. |
+| `MEDIAPIPE_HAND_LANDMARKER_MODEL_PATH` | Optional path to the downloaded Hand Landmarker task model. |
 | `CORS_ORIGINS`, `CORS_ALLOW_CREDENTIALS` | Browser-origin access settings. |
 | `DEFAULT_CONFIDENCE_THRESHOLD` | Coordinator intent retry threshold. |
 | `GESTURE_DATASET_PATH` | Collector JSONL path; defaults to `data/gesture_dataset_v1.jsonl`. |

@@ -122,6 +122,41 @@ def test_owner_can_read_update_history_and_delete_session(client_and_db):
     assert deleted_read_response.status_code == 404
 
 
+def test_multiple_text_and_emoji_messages_work_in_the_same_session(client_and_db):
+    client, _ = client_and_db
+    owner_token, _ = _signup_and_login(client, "repeat-message@example.com", "Repeat Message")
+    headers = _auth_headers(owner_token)
+
+    start_response = client.post("/simulate/start", headers=headers)
+    assert start_response.status_code == 200
+    session_id = start_response.json()["session_id"]
+
+    text_response = client.post(
+        "/communicate",
+        headers=headers,
+        json={
+            "input_text": "Hello",
+            "user_type": "verbal",
+            "session_id": session_id,
+        },
+    )
+    emoji_response = client.post(
+        "/communicate",
+        headers=headers,
+        json={
+            "input_text": "👋",
+            "user_type": "nonverbal",
+            "session_id": session_id,
+        },
+    )
+
+    assert text_response.status_code == 200
+    assert emoji_response.status_code == 200
+    history = client.get(f"/session/{session_id}", headers=headers)
+    assert history.status_code == 200
+    assert len(history.json()["messages"]) == 2
+
+
 def test_different_authenticated_user_gets_403(client_and_db):
     client, _ = client_and_db
     owner_token, _ = _signup_and_login(client, "owner3@example.com", "Owner Three")

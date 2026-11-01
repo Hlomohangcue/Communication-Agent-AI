@@ -32,7 +32,8 @@ class DynamicGestureTracker:
 
     @staticmethod
     def _normalized_palm_center(hand_landmarks) -> Tuple[float, float]:
-        palm = [hand_landmarks.landmark[index] for index in (5, 9, 13, 17)]
+        landmarks = getattr(hand_landmarks, "landmark", hand_landmarks)
+        palm = [landmarks[index] for index in (5, 9, 13, 17)]
         return (
             sum(point.x for point in palm) / 4,
             sum(point.y for point in palm) / 4,
@@ -40,8 +41,9 @@ class DynamicGestureTracker:
 
     @staticmethod
     def _palm_width(hand_landmarks) -> float:
-        index_mcp = hand_landmarks.landmark[5]
-        pinky_mcp = hand_landmarks.landmark[17]
+        landmarks = getattr(hand_landmarks, "landmark", hand_landmarks)
+        index_mcp = landmarks[5]
+        pinky_mcp = landmarks[17]
         return math.hypot(index_mcp.x - pinky_mcp.x, index_mcp.y - pinky_mcp.y)
 
     @staticmethod
@@ -170,7 +172,8 @@ class DynamicGestureTracker:
                 history.samples.clear()
                 history.last_timestamp_ms = None
 
-            wrist = landmarks.landmark[0]
+            landmark_points = getattr(landmarks, "landmark", landmarks)
+            wrist = landmark_points[0]
             center_x, center_y = self._normalized_palm_center(landmarks)
             palm_width = self._palm_width(landmarks)
             if (

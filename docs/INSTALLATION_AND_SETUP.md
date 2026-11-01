@@ -19,12 +19,15 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe scripts\download_hand_landmarker.py
 ```
 
 The committed requirements pin FastAPI, Uvicorn, Pydantic, MediaPipe,
 OpenCV, NumPy, authentication packages, and the optional Gemini client package.
-MediaPipe/OpenCV wheel compatibility can vary by platform; Python 3.11 is the
-project's CI runtime.
+The model download script verifies the official Hand Landmarker task asset
+against its pinned SHA-256 digest. Python 3.11 is the project's CI runtime.
+Docker builds use a fully version-locked dependency file and fetch the same
+verified model into the image.
 
 ## Configure environment
 

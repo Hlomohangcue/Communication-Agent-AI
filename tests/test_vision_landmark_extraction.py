@@ -6,22 +6,37 @@ from backend.services.vision_service import VisionService
 
 
 def fake_hand_landmarks(count=21):
-    points = [
+    return [
         SimpleNamespace(x=index / 100, y=index / 200, z=-index / 300)
         for index in range(count)
     ]
-    return SimpleNamespace(landmark=points)
+
+
+def test_gesture_heuristics_read_mediapipe_tasks_landmark_lists():
+    landmarks = fake_hand_landmarks()
+    landmarks[4] = SimpleNamespace(x=0.4, y=0.5, z=0.0)
+    landmarks[3] = SimpleNamespace(x=0.4, y=0.5, z=0.0)
+    landmarks[8] = SimpleNamespace(x=0.5, y=0.2, z=0.0)
+    landmarks[6] = SimpleNamespace(x=0.5, y=0.4, z=0.0)
+    landmarks[12] = SimpleNamespace(x=0.6, y=0.2, z=0.0)
+    landmarks[10] = SimpleNamespace(x=0.6, y=0.4, z=0.0)
+    landmarks[16] = SimpleNamespace(x=0.7, y=0.6, z=0.0)
+    landmarks[14] = SimpleNamespace(x=0.7, y=0.4, z=0.0)
+    landmarks[20] = SimpleNamespace(x=0.8, y=0.6, z=0.0)
+    landmarks[18] = SimpleNamespace(x=0.8, y=0.4, z=0.0)
+
+    service = VisionService.__new__(VisionService)
+
+    assert service._recognize_gesture(landmarks, "Right") == "peace"
 
 
 def test_landmark_extraction_serializes_all_coordinates_without_gesture_labels(monkeypatch):
     service = VisionService.__new__(VisionService)
     service.mediapipe_available = True
-    service.hands = SimpleNamespace(process=lambda image: SimpleNamespace(
-        multi_hand_landmarks=[fake_hand_landmarks()],
-        multi_handedness=[SimpleNamespace(classification=[
-            SimpleNamespace(label="Right", score=0.96)
-        ])],
-    ))
+    service._detect_hands = lambda image: SimpleNamespace(
+        hand_landmarks=[fake_hand_landmarks()],
+        handedness=[[SimpleNamespace(category_name="Right", score=0.96)]],
+    )
     monkeypatch.setattr(
         service,
         "_decode_image",
@@ -50,12 +65,10 @@ def test_landmark_extraction_serializes_all_coordinates_without_gesture_labels(m
 def test_landmark_extraction_reports_missing_landmark_metadata(monkeypatch):
     service = VisionService.__new__(VisionService)
     service.mediapipe_available = True
-    service.hands = SimpleNamespace(process=lambda image: SimpleNamespace(
-        multi_hand_landmarks=[fake_hand_landmarks(count=20)],
-        multi_handedness=[SimpleNamespace(classification=[
-            SimpleNamespace(label="Left", score=0.9)
-        ])],
-    ))
+    service._detect_hands = lambda image: SimpleNamespace(
+        hand_landmarks=[fake_hand_landmarks(count=20)],
+        handedness=[[SimpleNamespace(category_name="Left", score=0.9)]],
+    )
     monkeypatch.setattr(
         service,
         "_decode_image",
@@ -72,13 +85,13 @@ def test_landmark_extraction_reports_missing_landmark_metadata(monkeypatch):
 def test_landmark_extraction_keeps_two_hands_as_distinct_observations(monkeypatch):
     service = VisionService.__new__(VisionService)
     service.mediapipe_available = True
-    service.hands = SimpleNamespace(process=lambda image: SimpleNamespace(
-        multi_hand_landmarks=[fake_hand_landmarks(), fake_hand_landmarks()],
-        multi_handedness=[
-            SimpleNamespace(classification=[SimpleNamespace(label="Left", score=0.9)]),
-            SimpleNamespace(classification=[SimpleNamespace(label="Right", score=0.8)]),
+    service._detect_hands = lambda image: SimpleNamespace(
+        hand_landmarks=[fake_hand_landmarks(), fake_hand_landmarks()],
+        handedness=[
+            [SimpleNamespace(category_name="Left", score=0.9)],
+            [SimpleNamespace(category_name="Right", score=0.8)],
         ],
-    ))
+    )
     monkeypatch.setattr(
         service,
         "_decode_image",
@@ -91,3 +104,37 @@ def test_landmark_extraction_keeps_two_hands_as_distinct_observations(monkeypatc
     assert [hand["hand_side"] for hand in result["observations"]] == ["Left", "Right"]
     assert [hand["handedness_confidence"] for hand in result["observations"]] == [0.9, 0.8]
     assert result["observations"][0] is not result["observations"][1]
+
+
+def test_tasks_landmarks_flow_through_gesture_interpretation(monkeypatch):
+    service = VisionService.__new__(VisionService)
+    service.mediapipe_available = True
+    service.gesture_to_emoji = {"open_palm": "🖐️"}
+    service.dynamic_gesture_tracker = None
+    service._detect_hands = lambda image: SimpleNamespace(
+        hand_landmarks=[fake_hand_landmarks()],
+        handedness=[[SimpleNamespace(category_name="Right", score=0.96)]],
+    )
+    monkeypatch.setattr(
+        service,
+        "_decode_image",
+        lambda frame: np.zeros((8, 8, 3), dtype=np.uint8),
+    )
+    monkeypatch.setattr(service, "_recognize_gesture", lambda *_args: "open_palm")
+
+    result = service.process_frame("frame")
+
+    assert result["hands_detected"] == 1
+    assert result["gestures"] == [{
+        "gesture": "open_palm",
+        "hand": "Right",
+        "confidence": 0.96,
+        "movement_direction": "unavailable",
+        "movement_displacement": 0.0,
+        "movement_velocity": 0.0,
+        "wrist_movement_direction": "unavailable",
+        "wrist_movement_displacement": 0.0,
+        "wrist_movement_velocity": 0.0,
+        "dynamic_gesture_confidence": 0.0,
+    }]
+    assert result["emojis"] == ["🖐️"]
