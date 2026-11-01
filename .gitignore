@@ -10,6 +10,9 @@ env/
 venv/
 ENV/
 *.db
+*.sqlite
+*.sqlite3
+/backups/
 /data/gesture_dataset_v1.jsonl
 /data/gesture_dataset_v1.jsonl.lock
 /data/gesture_splits/
